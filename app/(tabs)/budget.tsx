@@ -53,9 +53,12 @@ export default function BudgetScreen() {
   const loadBudgetData = async () => {
     try {
       const budgetCategories = await databaseService.getBudgetCategories();
+      // Filtrer complètement la catégorie "Revenus" de l'affichage
+      const filteredCategories = budgetCategories.filter(cat => cat.name !== 'Revenus');
+      
       // Séparer les catégories incluses dans le budget et celles hors budget
-      const includedCategories = budgetCategories.filter(cat => cat.includedInBudget !== false);
-      const excludedCategories = budgetCategories.filter(cat => cat.includedInBudget === false);
+      const includedCategories = filteredCategories.filter(cat => cat.includedInBudget !== false);
+      const excludedCategories = filteredCategories.filter(cat => cat.includedInBudget === false);
       
       // Pour l'affichage, on garde toutes les catégories mais on calculera le total différemment
       setCategories([...includedCategories, ...excludedCategories]);
