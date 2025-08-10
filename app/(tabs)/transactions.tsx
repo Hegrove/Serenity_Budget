@@ -121,6 +121,11 @@ export default function TransactionsScreen() {
     </View>
   );
 
+  const handleFabPress = () => {
+    triggerLight();
+    router.push('/add-transaction');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -183,6 +188,16 @@ export default function TransactionsScreen() {
         }
         ListEmptyComponent={renderEmptyState}
       />
+
+      {/* FAB flottant */}
+      <View style={styles.fabContainer} pointerEvents="box-none">
+        <TouchableOpacity style={styles.fab} onPress={handleFabPress}>
+          <View style={styles.fabInner}>
+            <View style={[styles.fabLine, styles.fabLineVertical]} />
+            <View style={[styles.fabLine, styles.fabLineHorizontal]} />
+          </View>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -347,5 +362,45 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
     paddingHorizontal: 32,
+  },
+  fabContainer: {
+    position: 'absolute',
+    bottom: 90,
+    right: 20,
+    zIndex: 1000,
+  },
+  fab: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#0891b2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  fabInner: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fabLine: {
+    backgroundColor: '#ffffff',
+    position: 'absolute',
+  },
+  fabLineVertical: {
+    width: 2,
+    height: 16,
+  },
+  fabLineHorizontal: {
+    width: 16,
+    height: 2,
   },
 });
