@@ -21,6 +21,7 @@ export interface BudgetCategory {
   spent: number;
   color: string;
   isActive: boolean;
+  includedInBudget?: boolean;
 }
 
 export interface SavingsGoal {
@@ -96,7 +97,8 @@ class DatabaseService {
         allocated REAL NOT NULL,
         spent REAL DEFAULT 0,
         color TEXT NOT NULL,
-        isActive INTEGER DEFAULT 1
+        isActive INTEGER DEFAULT 1,
+        includedInBudget INTEGER DEFAULT 1
       );
 
       CREATE TABLE IF NOT EXISTS savings_goals (
@@ -118,6 +120,13 @@ class DatabaseService {
       );
     `);
 
+    // Ajouter la colonne includedInBudget si elle n'existe pas déjà
+    try {
+      await db.execAsync(`ALTER TABLE budget_categories ADD COLUMN includedInBudget INTEGER DEFAULT 1;`);
+    } catch (e) {
+      // ignore "duplicate column name"
+    }
+
     await this.insertDefaultCategories();
     await this.insertDefaultSettings();
   }
@@ -127,26 +136,37 @@ class DatabaseService {
     const db = this.db;
 
     const defaults = [
-      { name: 'Alimentation', allocated: 400, color: '#059669' },
-      { name: 'Transport',    allocated: 200, color: '#0891b2' },
-      { name: 'Sorties',      allocated: 150, color: '#7c3aed' },
-      { name: 'Shopping',     allocated: 100, color: '#dc2626' },
-      { name: 'Santé',        allocated:  80, color: '#f59e0b' },
-      { name: 'Épargne',      allocated: 300, color: '#10b981' },
+      { name: 'Alimentation', allocated: 400, color: '#059669', included: 1 },
+      { name: 'Transport',    allocated: 200, color: '#0891b2', included: 1 },
+      { name: 'Sorties',      allocated: 150, color: '#7c3aed', included: 1 },
+      { name: 'Shopping',     allocated: 100, color: '#dc2626', included: 1 },
+      { name: 'Santé',        allocated:  80, color: '#f59e0b', included: 1 },
+      { name: 'Épargne',      allocated: 300, color: '#10b981', included: 1 },
+      { name: 'Autres',       allocated:   0, color: '#94a3b8', included: 0 }, // hors budget
     ];
 
     for (const c of defaults) {
-      // Insère si absente, ne touche pas aux existantes
       await db.runAsync(
-        'INSERT OR IGNORE INTO budget_categories (name, allocated, spent, color, isActive) VALUES (?, ?, 0, ?, 1)',
-        c.name, c.allocated, c.color
+        `INSERT OR IGNORE INTO budget_categories
+         (name, allocated, spent, color, isActive, includedInBudget)
+         VALUES (?, ?, 0, ?, 1, ?)`,
+        c.name, c.allocated, c.color, c.included
       );
-      
-      // S'assurer que la catégorie est active si elle existait déjà
-      await db.runAsync(
-        'UPDATE budget_categories SET isActive = 1 WHERE name = ?',
-        c.name
-      );
+
+      // Si "Autres" existait déjà avec une allocation > 0 par erreur, on la remet hors budget
+      if (c.name === 'Autres') {
+        await db.runAsync(
+          `UPDATE budget_categories
+           SET includedInBudget = 0, allocated = 0, isActive = 1
+           WHERE name = 'Autres'`
+        );
+      } else {
+        // S'assurer que les autres catégories sont actives et incluses dans le budget
+        await db.runAsync(
+          'UPDATE budget_categories SET isActive = 1, includedInBudget = 1 WHERE name = ?',
+          c.name
+        );
+      }
     }
   }
 
@@ -161,6 +181,24 @@ class DatabaseService {
       await db.runAsync(
         'INSERT INTO user_settings (id, budgetMethod, currency, notifications, biometricEnabled) VALUES (1, ?, ?, ?, ?)',
         'thirds', 'EUR', 1, 0
+      );
+    }
+  }
+
+  /* ----- Helper pour garantir l'existence d'une catégorie ----- */
+
+  private async ensureCategory(name: string): Promise<void> {
+    const db = await this.getDb();
+    const rows = await db.getAllAsync<{ id: number }>(
+      'SELECT id FROM budget_categories WHERE name = ?', name
+    );
+    if (rows.length === 0) {
+      const included = name === 'Autres' ? 0 : 1;
+      const color = name === 'Autres' ? '#94a3b8' : '#0891b2';
+      await db.runAsync(
+        `INSERT INTO budget_categories (name, allocated, spent, color, isActive, includedInBudget)
+         VALUES (?, 0, 0, ?, 1, ?)`,
+        name, color, included
       );
     }
   }
@@ -191,13 +229,16 @@ class DatabaseService {
 
       console.log('Transaction insérée avec ID:', result.lastInsertRowId);
       
+      // S'assurer que la catégorie existe avant de mettre à jour les dépenses
+      await this.ensureCategory(t.category);
+      
       // Mettre à jour le budget de la catégorie si c'est une dépense
       if (t.amount < 0) {
         console.log('Mise à jour du budget pour la catégorie:', t.category);
         const spentAmount = Math.abs(t.amount);
         console.log('Montant à ajouter aux dépenses:', spentAmount);
         
-        await this.ensureCategoryExistsAndUpdate(t.category, spentAmount);
+        await this.updateCategorySpent(t.category, spentAmount);
       }
 
       console.log('Transaction ajoutée avec succès, ID:', result.lastInsertRowId);
@@ -307,6 +348,7 @@ class DatabaseService {
     if (up.spent      !== undefined) { fields.push('spent = ?');      values.push(up.spent);      }
     if (up.color      !== undefined) { fields.push('color = ?');      values.push(up.color);      }
     if (up.isActive   !== undefined) { fields.push('isActive = ?');   values.push(up.isActive ? 1 : 0); }
+    if (up.includedInBudget !== undefined) { fields.push('includedInBudget = ?'); values.push(up.includedInBudget ? 1 : 0); }
 
     if (fields.length === 0) return;   // rien à mettre à jour
 
@@ -330,40 +372,6 @@ class DatabaseService {
     );
   }
 
-  /* ----- Helper pour gérer les catégories automatiquement ----- */
-
-  private async ensureCategoryExistsAndUpdate(categoryName: string, spentAmount: number): Promise<void> {
-    const db = await this.getDb();
-    
-    // Vérifier si la catégorie existe
-    const [existingCategory] = await db.getAllAsync<BudgetCategory>(
-      'SELECT * FROM budget_categories WHERE name = ? AND isActive = 1',
-      categoryName
-    );
-    
-    if (!existingCategory) {
-      console.log('Catégorie inexistante, création automatique:', categoryName);
-      // Créer la catégorie avec un budget par défaut
-      await db.runAsync(
-        'INSERT INTO budget_categories (name, allocated, spent, color, isActive) VALUES (?, ?, ?, ?, ?)',
-        categoryName, 200, Math.max(0, spentAmount), '#64748b', 1
-      );
-    } else {
-      console.log('Mise à jour de la catégorie existante:', categoryName, 'montant:', spentAmount);
-      // Mettre à jour le montant dépensé
-      await db.runAsync(
-        'UPDATE budget_categories SET spent = spent + ? WHERE name = ? AND isActive = 1',
-        spentAmount, categoryName
-      );
-      
-      // S'assurer que spent ne devient jamais négatif
-      await db.runAsync(
-        'UPDATE budget_categories SET spent = MAX(0, spent) WHERE name = ? AND isActive = 1',
-        categoryName
-      );
-    }
-  }
-
   /* ----- Recalculer les budgets basés sur les transactions réelles ----- */
 
   async recalculateBudgetSpending(): Promise<void> {
@@ -377,7 +385,8 @@ class DatabaseService {
     
     for (const transaction of transactions) {
       if (transaction.amount < 0) {
-        await this.ensureCategoryExistsAndUpdate(transaction.category, Math.abs(transaction.amount));
+        await this.ensureCategory(transaction.category);
+        await this.updateCategorySpent(transaction.category, Math.abs(transaction.amount));
       }
     }
   }

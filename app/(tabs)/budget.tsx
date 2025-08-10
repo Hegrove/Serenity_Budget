@@ -53,7 +53,12 @@ export default function BudgetScreen() {
   const loadBudgetData = async () => {
     try {
       const budgetCategories = await databaseService.getBudgetCategories();
-      setCategories(budgetCategories);
+      // Séparer les catégories incluses dans le budget et celles hors budget
+      const includedCategories = budgetCategories.filter(cat => cat.includedInBudget !== false);
+      const excludedCategories = budgetCategories.filter(cat => cat.includedInBudget === false);
+      
+      // Pour l'affichage, on garde toutes les catégories mais on calculera le total différemment
+      setCategories([...includedCategories, ...excludedCategories]);
     } catch (error) {
       console.error('Erreur lors du chargement du budget:', error);
     }
@@ -202,53 +207,76 @@ export default function BudgetScreen() {
     return '#059669';
   };
 
-  const totalAllocated = categories.reduce((sum, cat) => sum + cat.allocated, 0);
-  const totalSpent = categories.reduce((sum, cat) => sum + cat.spent, 0);
+  // Calculer les totaux seulement pour les catégories incluses dans le budget
+  const includedCategories = categories.filter(cat => cat.includedInBudget !== false);
+  const excludedCategories = categories.filter(cat => cat.includedInBudget === false);
+  
+  const totalAllocated = includedCategories.reduce((sum, cat) => sum + cat.allocated, 0);
+  const totalSpent = includedCategories.reduce((sum, cat) => sum + cat.spent, 0);
   const totalRemaining = totalAllocated - totalSpent;
+  
+  // Total des dépenses hors budget
+  const totalOutOfBudget = excludedCategories.reduce((sum, cat) => sum + cat.spent, 0);
 
   const renderCategoryCard = (category: BudgetCategory) => {
     const percentage = category.allocated > 0 ? (category.spent / category.allocated) * 100 : 0;
     const remaining = category.allocated - category.spent;
+    const isOutOfBudget = category.includedInBudget === false;
 
     return (
       <TouchableOpacity 
         key={category.id} 
-        style={styles.categoryCard}
+        style={[styles.categoryCard, isOutOfBudget && styles.categoryCardOutOfBudget]}
         onPress={() => handleEditCategory(category)}>
         <View style={styles.categoryHeader}>
           <View style={styles.categoryInfo}>
             <View style={[styles.categoryDot, { backgroundColor: category.color }]} />
             <Text style={styles.categoryName}>{category.name}</Text>
+            {isOutOfBudget && (
+              <View style={styles.outOfBudgetBadge}>
+                <Text style={styles.outOfBudgetBadgeText}>Hors budget</Text>
+              </View>
+            )}
           </View>
           <View style={styles.categoryActions}>
-            <Text style={styles.categoryRemaining}>
-              {remaining >= 0 ? `${remaining.toFixed(0)}€ restants` : `Dépassé de ${Math.abs(remaining).toFixed(0)}€`}
-            </Text>
+            {isOutOfBudget ? (
+              <Text style={styles.categorySpentOnly}>
+                {category.spent.toFixed(0)}€ dépensés
+              </Text>
+            ) : (
+              <Text style={styles.categoryRemaining}>
+                {remaining >= 0 ? `${remaining.toFixed(0)}€ restants` : `Dépassé de ${Math.abs(remaining).toFixed(0)}€`}
+              </Text>
+            )}
             <Edit3 size={16} color="#64748b" />
           </View>
         </View>
         
         <View style={styles.amountRow}>
           <Text style={styles.spentAmount}>{category.spent.toFixed(0)}€</Text>
-          <Text style={styles.allocatedAmount}>/ {category.allocated.toFixed(0)}€</Text>
+          {!isOutOfBudget && (
+            <Text style={styles.allocatedAmount}>/ {category.allocated.toFixed(0)}€</Text>
+          )}
         </View>
         
-        <View style={styles.progressBarContainer}>
-          <View style={styles.progressBarBackground}>
-            <View 
-              style={[
-                styles.progressBarFill,
-                { 
-                  width: `${Math.min(percentage, 100)}%`,
-                  backgroundColor: getProgressColor(percentage)
-                }
-              ]} 
-            />
+        {!isOutOfBudget && (
+          <View style={styles.progressBarContainer}>
+            <View style={styles.progressBarBackground}>
+              <View 
+                style={[
+                  styles.progressBarFill,
+                  { 
+                    width: `${Math.min(percentage, 100)}%`,
+                    backgroundColor: getProgressColor(percentage)
+                  }
+                ]} 
+              />
+            </View>
+            <Text style={[styles.progressPercentage, { color: getProgressColor(percentage) }]}>
+              {percentage.toFixed(0)}%
+            </Text>
           </View>
-          <Text style={[styles.progressPercentage, { color: getProgressColor(percentage) }]}>
-            {percentage.toFixed(0)}%
-          </Text>
-        </View>
+        )}
       </TouchableOpacity>
     );
   };
@@ -329,8 +357,22 @@ export default function BudgetScreen() {
 
             {/* Catégories */}
             <View style={styles.categoriesContainer}>
-              <Text style={styles.sectionTitle}>Catégories</Text>
-              {categories.map(renderCategoryCard)}
+              {includedCategories.length > 0 && (
+                <>
+                  <Text style={styles.sectionTitle}>Budget</Text>
+                  {includedCategories.map(renderCategoryCard)}
+                </>
+              )}
+              
+              {excludedCategories.length > 0 && (
+                <>
+                  <Text style={[styles.sectionTitle, { marginTop: 32 }]}>Hors budget</Text>
+                  <Text style={styles.sectionSubtitle}>
+                    Dépenses non planifiées : {formatCurrency(totalOutOfBudget)}
+                  </Text>
+                  {excludedCategories.map(renderCategoryCard)}
+                </>
+              )}
             </View>
           </>
         )}
@@ -606,6 +648,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Inter-SemiBold',
     color: '#1e293b',
+    flex: 1,
+  },
+  outOfBudgetBadge: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  outOfBudgetBadgeText: {
+    fontSize: 10,
+    fontFamily: 'Inter-Medium',
+    color: '#64748b',
   },
   categoryActions: {
     flexDirection: 'row',
@@ -616,6 +671,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter-Medium',
     color: '#64748b',
+  },
+  categorySpentOnly: {
+    fontSize: 12,
+    fontFamily: 'Inter-Medium',
+    color: '#f59e0b',
+  },
+  categoryCardOutOfBudget: {
+    borderLeftWidth: 3,
+    borderLeftColor: '#f59e0b',
   },
   amountRow: {
     flexDirection: 'row',
@@ -654,6 +718,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     minWidth: 40,
     textAlign: 'right',
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#64748b',
+    marginBottom: 16,
+    marginTop: -8,
   },
   modalContainer: {
     flex: 1,
