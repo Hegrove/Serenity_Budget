@@ -15,7 +15,7 @@ export default function TransactionsScreen() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
-  const categories = ['Toutes', 'Alimentation', 'Transport', 'Revenus', 'Sorties', 'Santé', 'Logement', 'Shopping', 'Autres'];
+  const categories = ['Toutes', 'Alimentation', 'Transport', 'Sorties', 'Shopping', 'Santé', 'Logement', 'Épargne', 'Revenus', 'Autres'];
 
   useEffect(() => {
     loadTransactions();

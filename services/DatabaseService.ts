@@ -136,6 +136,7 @@ class DatabaseService {
         { name: 'Sorties',      allocated: 150, color: '#7c3aed' },
         { name: 'Shopping',     allocated: 100, color: '#dc2626' },
         { name: 'Santé',        allocated:  80, color: '#f59e0b' },
+        { name: 'Épargne',      allocated: 300, color: '#10b981' },
       ];
 
       for (const c of defaults) {

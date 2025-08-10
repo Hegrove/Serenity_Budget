@@ -14,6 +14,7 @@ const CATEGORIES = [
   'Shopping',
   'Santé',
   'Logement',
+  'Épargne',
   'Revenus',
   'Autres'
 ];
