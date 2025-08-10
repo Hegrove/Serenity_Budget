@@ -23,7 +23,7 @@ export default function TabLayout() {
           marginTop: 4,
         },
       }}>
-      <Tabs
+      <Tabs.Screen
         name="index"
         options={{
           title: 'Accueil',
