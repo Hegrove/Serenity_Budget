@@ -1,22 +1,14 @@
-import { Tabs } from 'expo-router';
-import { router, usePathname } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+import { Tabs, useSegments } from 'expo-router';
+import { router } from 'expo-router';
 import { Chrome as Home, Receipt, Target, Users } from 'lucide-react-native';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { useHapticFeedback } from '@/hooks/useHapticFeedback';
-import { useState } from 'react';
 
 export default function TabLayout() {
   const { triggerLight } = useHapticFeedback();
-  const pathname = usePathname();
-  const [showFab, setShowFab] = useState(false);
-
-  // Utiliser useFocusEffect pour détecter quand on est sur l'onglet Transactions
-  useFocusEffect(() => {
-    const isTransactionsTab = pathname === '/(tabs)/transactions' || pathname.includes('/transactions');
-    console.log('Focus effect - pathname:', pathname, 'showFab:', isTransactionsTab);
-    setShowFab(isTransactionsTab);
-  });
+  const segments = useSegments();
+  const lastSegment = segments[segments.length - 1];
+  const isOnTransactions = lastSegment === 'transactions';
 
   const handleFabPress = () => {
     triggerLight();
@@ -83,7 +75,7 @@ export default function TabLayout() {
       </Tabs>
       
       {/* FAB flottant - uniquement dans l'onglet Transactions */}
-      {showFab && (
+      {isOnTransactions && (
         <View style={styles.fabContainer}>
           <TouchableOpacity style={styles.fab} onPress={handleFabPress}>
             <View style={styles.fabInner}>
