@@ -142,6 +142,7 @@ class DatabaseService {
       { name: 'Shopping',     allocated: 100, color: '#dc2626', included: 1 },
       { name: 'Santé',        allocated:  80, color: '#f59e0b', included: 1 },
       { name: 'Épargne',      allocated: 300, color: '#10b981', included: 1 },
+      { name: 'Revenus',      allocated:   0, color: '#059669', included: 0 }, // hors budget
       { name: 'Autres',       allocated:   0, color: '#94a3b8', included: 0 }, // hors budget
     ];
 
@@ -153,14 +154,15 @@ class DatabaseService {
         c.name, c.allocated, c.color, c.included
       );
 
-      // Si "Autres" existait déjà avec une allocation > 0 par erreur, on la remet hors budget
-      if (c.name === 'Autres') {
+      // Si "Autres" ou "Revenus" existaient déjà avec une allocation > 0 par erreur, on les remet hors budget
+      if (c.name === 'Autres' || c.name === 'Revenus') {
         await db.runAsync(
           `UPDATE budget_categories
            SET includedInBudget = 0, allocated = 0, isActive = 1
-           WHERE name = 'Autres'`
+           WHERE name = ?`,
+          c.name
         );
-      } else {
+      } else if (c.included === 1) {
         // S'assurer que les autres catégories sont actives et incluses dans le budget
         await db.runAsync(
           'UPDATE budget_categories SET isActive = 1, includedInBudget = 1 WHERE name = ?',
@@ -193,8 +195,9 @@ class DatabaseService {
       'SELECT id FROM budget_categories WHERE name = ?', name
     );
     if (rows.length === 0) {
-      const included = name === 'Autres' ? 0 : 1;
-      const color = name === 'Autres' ? '#94a3b8' : '#0891b2';
+      const included = (name === 'Autres' || name === 'Revenus') ? 0 : 1;
+      const color = name === 'Autres' ? '#94a3b8' : 
+                   name === 'Revenus' ? '#059669' : '#0891b2';
       await db.runAsync(
         `INSERT INTO budget_categories (name, allocated, spent, color, isActive, includedInBudget)
          VALUES (?, 0, 0, ?, 1, ?)`,
