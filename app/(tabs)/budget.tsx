@@ -90,13 +90,23 @@ export default function BudgetScreen() {
   const setupPersonalizedMethod = async (income: number) => {
     await databaseService.resetBudgetCategories();
     
+    // Répartition suggérée basée sur le revenu (règle des 50/30/20 adaptée)
+    const housingBudget = Math.round(income * 0.30); // 30% pour le logement
+    const foodBudget = Math.round(income * 0.15);    // 15% pour l'alimentation
+    const transportBudget = Math.round(income * 0.10); // 10% pour le transport
+    const entertainmentBudget = Math.round(income * 0.08); // 8% pour les sorties
+    const shoppingBudget = Math.round(income * 0.07);  // 7% pour le shopping
+    const savingsBudget = Math.round(income * 0.20);   // 20% pour l'épargne
+    const healthBudget = Math.round(income * 0.05);    // 5% pour la santé
+    
     const defaultCategories = [
-      { name: 'Logement', allocated: 0, spent: 0, color: '#059669', isActive: true },
-      { name: 'Alimentation', allocated: 0, spent: 0, color: '#0891b2', isActive: true },
-      { name: 'Transport', allocated: 0, spent: 0, color: '#7c3aed', isActive: true },
-      { name: 'Sorties', allocated: 0, spent: 0, color: '#dc2626', isActive: true },
-      { name: 'Shopping', allocated: 0, spent: 0, color: '#f59e0b', isActive: true },
-      { name: 'Épargne', allocated: 0, spent: 0, color: '#10b981', isActive: true },
+      { name: 'Logement', allocated: housingBudget, spent: 0, color: '#059669', isActive: true },
+      { name: 'Alimentation', allocated: foodBudget, spent: 0, color: '#0891b2', isActive: true },
+      { name: 'Transport', allocated: transportBudget, spent: 0, color: '#7c3aed', isActive: true },
+      { name: 'Sorties', allocated: entertainmentBudget, spent: 0, color: '#dc2626', isActive: true },
+      { name: 'Shopping', allocated: shoppingBudget, spent: 0, color: '#f59e0b', isActive: true },
+      { name: 'Épargne', allocated: savingsBudget, spent: 0, color: '#10b981', isActive: true },
+      { name: 'Santé', allocated: healthBudget, spent: 0, color: '#f97316', isActive: true },
     ];
 
     for (const category of defaultCategories) {
