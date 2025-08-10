@@ -13,6 +13,7 @@ export default function HomeScreen() {
   const [resteCeMois, setResteCeMois] = useState(0);
   const [progressionBudget, setProgressionBudget] = useState(0);
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+  const [depensesNonBudgetees, setDepensesNonBudgetees] = useState(0);
 
   useEffect(() => {
     initializeData();
@@ -42,6 +43,13 @@ export default function HomeScreen() {
       setResteAujourdhui(0);
       setResteCeMois(0);
       setProgressionBudget(0);
+      
+      // Calculer les dépenses non budgétées
+      const budgetCategories = await databaseService.getBudgetCategories();
+      const unbudgetedSpent = budgetCategories
+        .filter(cat => cat.includedInBudget === false && cat.name !== 'Revenus')
+        .reduce((sum, cat) => sum + cat.spent, 0);
+      setDepensesNonBudgetees(unbudgetedSpent);
     } catch (error) {
       console.error('Erreur lors du chargement des données:', error);
     }
@@ -152,6 +160,19 @@ export default function HomeScreen() {
             </View>
           </View>
         </View>
+
+        {/* Dépenses non budgétées */}
+        {depensesNonBudgetees > 0 && (
+          <View style={styles.unbudgetedCard}>
+            <View style={styles.unbudgetedHeader}>
+              <Text style={styles.unbudgetedTitle}>⚠️ Dépenses non budgétées</Text>
+            </View>
+            <Text style={styles.unbudgetedAmount}>{formatCurrency(depensesNonBudgetees)}</Text>
+            <Text style={styles.unbudgetedDescription}>
+              Dépenses hors de votre budget planifié
+            </Text>
+          </View>
+        )}
 
         {/* Transactions récentes ou état vide */}
         <View style={styles.recentCard}>
@@ -492,5 +513,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-Medium',
     color: '#ffffff',
+  },
+  unbudgetedCard: {
+    backgroundColor: '#fef3c7',
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#fbbf24',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  unbudgetedHeader: {
+    marginBottom: 8,
+  },
+  unbudgetedTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#92400e',
+  },
+  unbudgetedAmount: {
+    fontSize: 28,
+    fontFamily: 'Inter-SemiBold',
+    color: '#92400e',
+    marginBottom: 8,
+  },
+  unbudgetedDescription: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#92400e',
+    lineHeight: 20,
   },
 });

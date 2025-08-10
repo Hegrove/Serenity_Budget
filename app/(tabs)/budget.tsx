@@ -369,9 +369,9 @@ export default function BudgetScreen() {
               
               {excludedCategories.length > 0 && (
                 <>
-                  <Text style={[styles.sectionTitle, { marginTop: 32 }]}>Hors budget</Text>
+                  <Text style={[styles.sectionTitle, { marginTop: 32 }]}>Dépenses non budgétées</Text>
                   <Text style={styles.sectionSubtitle}>
-                    Dépenses non planifiées : {formatCurrency(totalOutOfBudget)}
+                    Total des dépenses hors budget : {formatCurrency(totalOutOfBudget)}
                   </Text>
                   {excludedCategories.map(renderCategoryCard)}
                 </>
