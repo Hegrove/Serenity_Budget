@@ -90,14 +90,14 @@ export default function BudgetScreen() {
   const setupPersonalizedMethod = async (income: number) => {
     await databaseService.resetBudgetCategories();
     
-    // Répartition suggérée basée sur le revenu (règle des 50/30/20 adaptée)
-    const housingBudget = Math.round(income * 0.30); // 30% pour le logement
-    const foodBudget = Math.round(income * 0.15);    // 15% pour l'alimentation
-    const transportBudget = Math.round(income * 0.10); // 10% pour le transport
-    const entertainmentBudget = Math.round(income * 0.08); // 8% pour les sorties
-    const shoppingBudget = Math.round(income * 0.07);  // 7% pour le shopping
-    const savingsBudget = Math.round(income * 0.20);   // 20% pour l'épargne
-    const healthBudget = Math.round(income * 0.05);    // 5% pour la santé
+    // Répartition suggérée basée sur le revenu (total = 100%)
+    const housingBudget = Math.round(income * 0.30);      // 30% pour le logement
+    const foodBudget = Math.round(income * 0.25);         // 25% pour l'alimentation
+    const transportBudget = Math.round(income * 0.10);    // 10% pour le transport
+    const entertainmentBudget = Math.round(income * 0.10); // 10% pour les sorties
+    const shoppingBudget = Math.round(income * 0.10);     // 10% pour le shopping
+    const savingsBudget = Math.round(income * 0.10);      // 10% pour l'épargne
+    const healthBudget = Math.round(income * 0.05);       // 5% pour la santé
     
     const defaultCategories = [
       { name: 'Logement', allocated: housingBudget, spent: 0, color: '#059669', isActive: true },
