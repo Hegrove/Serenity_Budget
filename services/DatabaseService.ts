@@ -125,26 +125,28 @@ class DatabaseService {
   private async insertDefaultCategories() {
     if (!this.db) throw new Error('Database not opened');
     const db = this.db;
-    const [{ count }] = await db.getAllAsync<{ count: number }>(
-      'SELECT COUNT(*) as count FROM budget_categories'
-    );
 
-    if (count === 0) {
-      const defaults = [
-        { name: 'Alimentation', allocated: 400, color: '#059669' },
-        { name: 'Transport',    allocated: 200, color: '#0891b2' },
-        { name: 'Sorties',      allocated: 150, color: '#7c3aed' },
-        { name: 'Shopping',     allocated: 100, color: '#dc2626' },
-        { name: 'Santé',        allocated:  80, color: '#f59e0b' },
-        { name: 'Épargne',      allocated: 300, color: '#10b981' },
-      ];
+    const defaults = [
+      { name: 'Alimentation', allocated: 400, color: '#059669' },
+      { name: 'Transport',    allocated: 200, color: '#0891b2' },
+      { name: 'Sorties',      allocated: 150, color: '#7c3aed' },
+      { name: 'Shopping',     allocated: 100, color: '#dc2626' },
+      { name: 'Santé',        allocated:  80, color: '#f59e0b' },
+      { name: 'Épargne',      allocated: 300, color: '#10b981' },
+    ];
 
-      for (const c of defaults) {
-        await db.runAsync(
-          'INSERT INTO budget_categories (name, allocated, color) VALUES (?,?,?)',
-          c.name, c.allocated, c.color
-        );
-      }
+    for (const c of defaults) {
+      // Insère si absente, ne touche pas aux existantes
+      await db.runAsync(
+        'INSERT OR IGNORE INTO budget_categories (name, allocated, spent, color, isActive) VALUES (?, ?, 0, ?, 1)',
+        c.name, c.allocated, c.color
+      );
+      
+      // S'assurer que la catégorie est active si elle existait déjà
+      await db.runAsync(
+        'UPDATE budget_categories SET isActive = 1 WHERE name = ?',
+        c.name
+      );
     }
   }
 
