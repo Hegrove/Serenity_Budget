@@ -91,26 +91,40 @@ export default function BudgetScreen() {
     await databaseService.resetBudgetCategories();
     
     // Répartition suggérée basée sur le revenu (total = 100%)
-    const housingBudget = Math.round(income * 0.30);      // 30% pour le logement
-    const foodBudget = Math.round(income * 0.25);         // 25% pour l'alimentation
-    const transportBudget = Math.round(income * 0.10);    // 10% pour le transport
-    const entertainmentBudget = Math.round(income * 0.10); // 10% pour les sorties
-    const shoppingBudget = Math.round(income * 0.10);     // 10% pour le shopping
-    const savingsBudget = Math.round(income * 0.10);      // 10% pour l'épargne
-    const healthBudget = Math.round(income * 0.05);       // 5% pour la santé
-    
-    const defaultCategories = [
-      { name: 'Logement', allocated: housingBudget, spent: 0, color: '#059669', isActive: true },
-      { name: 'Alimentation', allocated: foodBudget, spent: 0, color: '#0891b2', isActive: true },
-      { name: 'Transport', allocated: transportBudget, spent: 0, color: '#7c3aed', isActive: true },
-      { name: 'Sorties', allocated: entertainmentBudget, spent: 0, color: '#dc2626', isActive: true },
-      { name: 'Shopping', allocated: shoppingBudget, spent: 0, color: '#f59e0b', isActive: true },
-      { name: 'Épargne', allocated: savingsBudget, spent: 0, color: '#10b981', isActive: true },
-      { name: 'Santé', allocated: healthBudget, spent: 0, color: '#f97316', isActive: true },
+    const percentages = [
+      { name: 'Logement', percentage: 0.30, color: '#059669' },
+      { name: 'Alimentation', percentage: 0.25, color: '#0891b2' },
+      { name: 'Transport', percentage: 0.10, color: '#7c3aed' },
+      { name: 'Sorties', percentage: 0.10, color: '#dc2626' },
+      { name: 'Shopping', percentage: 0.10, color: '#f59e0b' },
+      { name: 'Épargne', percentage: 0.10, color: '#10b981' },
+      { name: 'Santé', percentage: 0.05, color: '#f97316' },
     ];
 
-    for (const category of defaultCategories) {
-      await databaseService.addBudgetCategory(category);
+    // Calculer les montants arrondis
+    const budgets = percentages.map(cat => ({
+      ...cat,
+      allocated: Math.round(income * cat.percentage)
+    }));
+
+    // Calculer la différence due aux arrondis
+    const totalAllocated = budgets.reduce((sum, cat) => sum + cat.allocated, 0);
+    const difference = income - totalAllocated;
+
+    // Ajuster la première catégorie (Logement) pour compenser la différence
+    if (difference !== 0) {
+      budgets[0].allocated += difference;
+    }
+    
+    // Créer les catégories avec les montants ajustés
+    for (const category of budgets) {
+      await databaseService.addBudgetCategory({
+        name: category.name,
+        allocated: category.allocated,
+        spent: 0,
+        color: category.color,
+        isActive: true
+      });
     }
   };
 
