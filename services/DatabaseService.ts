@@ -269,7 +269,8 @@ class DatabaseService {
     
     if (transaction && transaction.amount < 0) {
       // Retirer le montant dépensé du budget de la catégorie
-      await this.ensureCategoryExistsAndUpdate(transaction.category, -Math.abs(transaction.amount));
+      await this.ensureCategory(transaction.category);
+      await this.updateCategorySpent(transaction.category, -Math.abs(transaction.amount));
     }
     
     await db.runAsync('DELETE FROM transactions WHERE id = ?', id);
