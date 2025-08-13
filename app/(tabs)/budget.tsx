@@ -55,13 +55,7 @@ export default function BudgetScreen() {
       const budgetCategories = await databaseService.getBudgetCategories();
       // Filtrer complètement la catégorie "Revenus" de l'affichage
       const filteredCategories = budgetCategories.filter(cat => cat.name !== 'Revenus');
-      
-      // Séparer les catégories incluses dans le budget et celles hors budget
-      const includedCategories = filteredCategories.filter(cat => cat.includedInBudget !== false);
-      const excludedCategories = filteredCategories.filter(cat => cat.includedInBudget === false);
-      
-      // Pour l'affichage, on garde toutes les catégories mais on calculera le total différemment
-      setCategories([...includedCategories, ...excludedCategories]);
+      setCategories(filteredCategories);
     } catch (error) {
       console.error('Erreur lors du chargement du budget:', error);
     }
@@ -211,15 +205,15 @@ export default function BudgetScreen() {
   };
 
   // Calculer les totaux seulement pour les catégories incluses dans le budget
-  const includedCategories = categories.filter(cat => cat.includedInBudget !== false);
-  const excludedCategories = categories.filter(cat => cat.includedInBudget === false);
+  const budgeted = categories.filter(cat => (cat.includedInBudget ?? 1) !== 0);
+  const unbudgeted = categories.filter(cat => (cat.includedInBudget ?? 1) === 0);
   
-  const totalAllocated = includedCategories.reduce((sum, cat) => sum + cat.allocated, 0);
-  const totalSpent = includedCategories.reduce((sum, cat) => sum + cat.spent, 0);
+  const totalAllocated = budgeted.reduce((sum, cat) => sum + cat.allocated, 0);
+  const totalSpent = budgeted.reduce((sum, cat) => sum + cat.spent, 0);
   const totalRemaining = totalAllocated - totalSpent;
   
   // Total des dépenses hors budget
-  const totalOutOfBudget = excludedCategories.reduce((sum, cat) => sum + cat.spent, 0);
+  const unbudgetedTotal = unbudgeted.reduce((sum, cat) => sum + cat.spent, 0);
 
   const renderCategoryCard = (category: BudgetCategory) => {
     const percentage = category.allocated > 0 ? (category.spent / category.allocated) * 100 : 0;
@@ -360,20 +354,20 @@ export default function BudgetScreen() {
 
             {/* Catégories */}
             <View style={styles.categoriesContainer}>
-              {includedCategories.length > 0 && (
+              {budgeted.length > 0 && (
                 <>
                   <Text style={styles.sectionTitle}>Budget</Text>
-                  {includedCategories.map(renderCategoryCard)}
+                  {budgeted.map(renderCategoryCard)}
                 </>
               )}
               
-              {excludedCategories.length > 0 && (
+              {unbudgeted.length > 0 && (
                 <>
                   <Text style={[styles.sectionTitle, { marginTop: 32 }]}>Dépenses non budgétées</Text>
                   <Text style={styles.sectionSubtitle}>
-                    Total des dépenses hors budget : {formatCurrency(totalOutOfBudget)}
+                    Total des dépenses hors budget : {formatCurrency(unbudgetedTotal)}
                   </Text>
-                  {excludedCategories.map(renderCategoryCard)}
+                  {unbudgeted.map(renderCategoryCard)}
                 </>
               )}
             </View>

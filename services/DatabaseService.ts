@@ -21,6 +21,7 @@ export interface BudgetCategory {
   spent: number;
   color: string;
   isActive: boolean;
+  includedInBudget?: number; // 1 = oui, 0 = non
   includedInBudget?: boolean;
 }
 
@@ -141,8 +142,9 @@ class DatabaseService {
       { name: 'Sorties',      allocated: 150, color: '#7c3aed', included: 1 },
       { name: 'Shopping',     allocated: 100, color: '#dc2626', included: 1 },
       { name: 'Santé',        allocated:  80, color: '#f59e0b', included: 1 },
-      { name: 'Épargne',      allocated: 300, color: '#10b981', included: 1 },
-      { name: 'Revenus',      allocated:   0, color: '#059669', included: 0 }, // hors budget
+      { name: 'Logement',     allocated:  0,  color: '#3b82f6', included: 1 },
+      { name: 'Revenus',      allocated:  0,  color: '#10b981', included: 0 }, // hors budget
+      { name: 'Épargne',      allocated: 200, color: '#10b981', included: 1 },
       { name: 'Autres',       allocated:   0, color: '#94a3b8', included: 0 }, // hors budget
     ];
 
@@ -153,23 +155,21 @@ class DatabaseService {
          VALUES (?, ?, 0, ?, 1, ?)`,
         c.name, c.allocated, c.color, c.included
       );
-
-      // Si "Autres" ou "Revenus" existaient déjà avec une allocation > 0 par erreur, on les remet hors budget
-      if (c.name === 'Autres' || c.name === 'Revenus') {
-        await db.runAsync(
-          `UPDATE budget_categories
-           SET includedInBudget = 0, allocated = 0, isActive = 1
-           WHERE name = ?`,
-          c.name
-        );
-      } else if (c.included === 1) {
-        // S'assurer que les autres catégories sont actives et incluses dans le budget
-        await db.runAsync(
-          'UPDATE budget_categories SET isActive = 1, includedInBudget = 1 WHERE name = ?',
-          c.name
-        );
-      }
     }
+
+    // S'il existait déjà "Autres" mal configuré, on normalise :
+    await db.runAsync(
+      `UPDATE budget_categories
+       SET includedInBudget = 0, allocated = 0, isActive = 1
+       WHERE name = 'Autres'`
+    );
+
+    // S'assurer que "Revenus" est aussi hors budget
+    await db.runAsync(
+      `UPDATE budget_categories
+       SET includedInBudget = 0, allocated = 0, isActive = 1
+       WHERE name = 'Revenus'`
+    );
   }
 
   private async insertDefaultSettings() {
@@ -352,7 +352,7 @@ class DatabaseService {
     if (up.spent      !== undefined) { fields.push('spent = ?');      values.push(up.spent);      }
     if (up.color      !== undefined) { fields.push('color = ?');      values.push(up.color);      }
     if (up.isActive   !== undefined) { fields.push('isActive = ?');   values.push(up.isActive ? 1 : 0); }
-    if (up.includedInBudget !== undefined) { fields.push('includedInBudget = ?'); values.push(up.includedInBudget ? 1 : 0); }
+    if ((up as any).includedInBudget !== undefined) { fields.push('includedInBudget = ?'); values.push((up as any).includedInBudget ? 1 : 0); }
 
     if (fields.length === 0) return;   // rien à mettre à jour
 

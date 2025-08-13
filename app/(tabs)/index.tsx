@@ -13,7 +13,7 @@ export default function HomeScreen() {
   const [resteCeMois, setResteCeMois] = useState(0);
   const [progressionBudget, setProgressionBudget] = useState(0);
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
-  const [depensesNonBudgetees, setDepensesNonBudgetees] = useState(0);
+  const [unbudgetedSpent, setUnbudgetedSpent] = useState(0);
 
   useEffect(() => {
     initializeData();
@@ -46,10 +46,10 @@ export default function HomeScreen() {
       
       // Calculer les dépenses non budgétées
       const budgetCategories = await databaseService.getBudgetCategories();
-      const unbudgetedSpent = budgetCategories
-        .filter(cat => cat.includedInBudget === false && cat.name !== 'Revenus')
+      const total = budgetCategories
+        .filter(cat => (cat.includedInBudget ?? 1) === 0 && cat.name !== 'Revenus')
         .reduce((sum, cat) => sum + cat.spent, 0);
-      setDepensesNonBudgetees(unbudgetedSpent);
+      setUnbudgetedSpent(total);
     } catch (error) {
       console.error('Erreur lors du chargement des données:', error);
     }
@@ -66,7 +66,17 @@ export default function HomeScreen() {
   
   useFocusEffect(
     React.useCallback(() => {
-      initializeData();
+      let mounted = true;
+      const load = async () => {
+        try {
+          await databaseService.initialize();
+          await loadData();
+        } catch (error) {
+          console.error('Erreur lors du rechargement:', error);
+        }
+      };
+      load();
+      return () => { mounted = false; };
     }, [])
   );
 
@@ -162,14 +172,14 @@ export default function HomeScreen() {
         </View>
 
         {/* Dépenses non budgétées */}
-        {depensesNonBudgetees > 0 && (
+        {unbudgetedSpent > 0 && (
           <View style={styles.unbudgetedCard}>
             <View style={styles.unbudgetedHeader}>
               <Text style={styles.unbudgetedTitle}>⚠️ Dépenses non budgétées</Text>
             </View>
-            <Text style={styles.unbudgetedAmount}>{formatCurrency(depensesNonBudgetees)}</Text>
+            <Text style={styles.unbudgetedAmount}>{formatCurrency(unbudgetedSpent)}</Text>
             <Text style={styles.unbudgetedDescription}>
-              Dépenses hors de votre budget planifié
+              Pensez à budgéter ces dépenses pour garder le contrôle.
             </Text>
           </View>
         )}
