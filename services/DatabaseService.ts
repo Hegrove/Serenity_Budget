@@ -22,6 +22,9 @@ export interface BudgetCategory {
   color: string;
   isActive: boolean;
   includedInBudget?: number; // 1 = inclus dans le budget, 0 = hors budget
+  isLocked?: number;         // 1/0
+  weight?: number;           // >=0
+  isBuffer?: number;         // 1/0
 }
 
 export interface SavingsGoal {
@@ -151,6 +154,21 @@ class DatabaseService {
       // ignore "duplicate column name"
     }
 
+    // Colonnes supplémentaires (safe migrations)
+    try { await db.execAsync(`ALTER TABLE budget_categories ADD COLUMN isLocked INTEGER DEFAULT 0;`); } catch {}
+    try { await db.execAsync(`ALTER TABLE budget_categories ADD COLUMN weight REAL DEFAULT 1;`); } catch {}
+    try { await db.execAsync(`ALTER TABLE budget_categories ADD COLUMN isBuffer INTEGER DEFAULT 0;`); } catch {}
+
+    // Initialise monthlyBudget si vide : somme des allocations budgétées actuelles
+    await db.execAsync(`
+      UPDATE user_settings SET monthlyBudget = (
+        SELECT IFNULL(SUM(allocated), 0)
+        FROM budget_categories
+        WHERE isActive = 1 AND includedInBudget = 1
+      )
+      WHERE (monthlyBudget IS NULL OR monthlyBudget = 0)
+    `);
+
     await this.insertDefaultCategories();
     await this.insertDefaultSettings();
   }
@@ -168,15 +186,16 @@ class DatabaseService {
       { name: 'Logement',     allocated:  0,  color: '#3b82f6', included: 1 },
       { name: 'Revenus',      allocated:  0,  color: '#10b981', included: 1 },
       { name: 'Épargne',      allocated: 200, color: '#10b981', included: 1 },
+      { name: 'Imprévus',     allocated:   0, color: '#64748b', included: 1 }, // tampon
       { name: 'Autres',       allocated:   0, color: '#94a3b8', included: 0 }, // hors budget
     ];
 
     for (const c of defaults) {
       await db.runAsync(
         `INSERT OR IGNORE INTO budget_categories
-         (name, allocated, spent, color, isActive, includedInBudget)
-         VALUES (?, ?, 0, ?, 1, ?)`,
-        c.name, c.allocated, c.color, c.included
+         (name, allocated, spent, color, isActive, includedInBudget, isLocked, weight, isBuffer)
+         VALUES (?, ?, 0, ?, 1, ?, 0, 1, CASE WHEN ?='Imprévus' THEN 1 ELSE 0 END)`,
+        c.name, c.allocated, c.color, c.included, c.name
       );
     }
 
@@ -187,6 +206,8 @@ class DatabaseService {
        WHERE name = 'Autres'`
     );
 
+    // S'assurer qu'Imprévus est bien configuré comme tampon
+    await db.runAsync(`UPDATE budget_categories SET isBuffer = 1 WHERE name = 'Imprévus'`);
   }
 
   private async insertDefaultSettings() {
@@ -221,36 +242,88 @@ class DatabaseService {
 
   /* ----- Répartition proportionnelle ----- */
 
-  async rebalanceAllocations(protectedCategoryId: number): Promise<void> {
+  /**
+   * Ré-étale allocations pour garder Σ(allocations budgétées) = monthlyBudget.
+   * @param protectedId id de la catégorie modifiée
+   * @param delta newAllocated - oldAllocated ; >0 on doit "trouver" de l'argent, <0 on "libère"
+   * Règles :
+   *  - on puise/dépose d'abord dans le tampon (isBuffer=1, ≠ protected)
+   *  - sinon on répartit sur catégories non verrouillées (isLocked=0, isBuffer=0) au prorata de weight
+   *  - locked (isLocked=1) et le tampon ne bougent pas (hors étape tampon)
+   */
+  async rebalanceAllocationsV2(protectedId: number, delta: number): Promise<void> {
     const db = await this.getDb();
     const B = await this.getMonthlyBudget();
 
-    const cats = await db.getAllAsync<{id:number; allocated:number}>(
-      `SELECT id, allocated FROM budget_categories
-       WHERE isActive = 1 AND includedInBudget = 1`
+    const cats = await db.getAllAsync<{
+      id: number; name: string; allocated: number;
+      includedInBudget: number; isLocked: number; weight: number; isBuffer: number;
+    }>(
+      `SELECT id, name, allocated, includedInBudget, isLocked, weight, isBuffer
+       FROM budget_categories WHERE isActive = 1 AND includedInBudget = 1`
     );
 
-    const prot = cats.find(c => c.id === protectedCategoryId);
+    const prot = cats.find(c => c.id === protectedId);
     if (!prot) return;
 
-    const others = cats.filter(c => c.id !== protectedCategoryId);
-    const sumOthers = others.reduce((s, c) => s + (c.allocated || 0), 0);
-    const targetOthers = Math.max(B - (prot.allocated || 0), 0);
+    const buffer = cats.find(c => c.isBuffer === 1 && c.id !== protectedId);
+    const adjustable = cats.filter(c => c.id !== protectedId && c.isLocked !== 1 && c.isBuffer !== 1);
 
-    if (sumOthers <= 0) return;
+    // Besoin d'argent (delta > 0)
+    if (delta > 0) {
+      let remaining = +delta.toFixed(2);
 
-    const scale = targetOthers / sumOthers;
+      if (buffer && buffer.allocated > 0) {
+        const take = Math.min(remaining, buffer.allocated);
+        buffer.allocated = +(buffer.allocated - take).toFixed(2);
+        remaining = +(remaining - take).toFixed(2);
+      }
 
-    let acc = 0;
-    const updates = others.map((c, i) => {
-      const raw = (c.allocated || 0) * scale;
-      const newAlloc = i === others.length - 1 ? +(targetOthers - acc).toFixed(2) : +raw.toFixed(2);
-      acc = +(acc + newAlloc).toFixed(2);
-      return { id: c.id, newAlloc };
+      if (remaining > 0 && adjustable.length > 0) {
+        const totalWeight = adjustable.reduce((s, c) => s + (c.weight || 1), 0) || 1;
+        let acc = 0;
+        adjustable.forEach((c, i) => {
+          const raw = (remaining * (c.weight || 1)) / totalWeight;
+          let give = i === adjustable.length - 1 ? +(remaining - acc).toFixed(2) : +raw.toFixed(2);
+          give = Math.min(give, c.allocated); // ne pas passer < 0
+          c.allocated = +(c.allocated - give).toFixed(2);
+          acc = +(acc + give).toFixed(2);
+        });
+      }
+    }
+
+    // On libère de l'argent (delta < 0)
+    if (delta < 0) {
+      const freed = +(-delta).toFixed(2);
+      if (buffer) {
+        buffer.allocated = +(buffer.allocated + freed).toFixed(2);
+      } else if (adjustable.length > 0) {
+        const totalWeight = adjustable.reduce((s, c) => s + (c.weight || 1), 0) || 1;
+        let acc = 0;
+        adjustable.forEach((c, i) => {
+          const raw = (freed * (c.weight || 1)) / totalWeight;
+          const add = i === adjustable.length - 1 ? +(freed - acc).toFixed(2) : +raw.toFixed(2);
+          c.allocated = +(c.allocated + add).toFixed(2);
+          acc = +(acc + add).toFixed(2);
+        });
+      }
+    }
+
+    // Sauvegarde atomique
+    await db.transactionAsync(async tx => {
+      for (const c of cats) {
+        await tx.runAsync(`UPDATE budget_categories SET allocated = ? WHERE id = ?`, c.allocated, c.id);
+      }
     });
 
-    for (const u of updates) {
-      await db.runAsync('UPDATE budget_categories SET allocated = ? WHERE id = ?', u.newAlloc, u.id);
+    // Correction arrondis : forcer Σ = B
+    const total = (await db.getFirstAsync<{ s:number }>(
+      `SELECT IFNULL(SUM(allocated),0) as s FROM budget_categories WHERE isActive=1 AND includedInBudget=1`
+    ))?.s || 0;
+    const diff = +(B - total).toFixed(2);
+    if (Math.abs(diff) >= 0.01) {
+      const target = buffer ?? prot;
+      await db.runAsync(`UPDATE budget_categories SET allocated = ? WHERE id = ?`, +(target.allocated + diff).toFixed(2), target.id);
     }
   }
 
@@ -402,22 +475,26 @@ class DatabaseService {
   async addBudgetCategory(c: Omit<BudgetCategory, 'id'>): Promise<number> {
     const db = await this.getDb();
     const res = await db.runAsync(
-      'INSERT INTO budget_categories (name, allocated, spent, color, isActive, includedInBudget) VALUES (?,?,?,?,?,?)',
-      c.name, c.allocated, c.spent ?? 0, c.color, c.isActive ? 1 : 0, (c.includedInBudget ?? 1) ? 1 : 0
+      'INSERT INTO budget_categories (name, allocated, spent, color, isActive, includedInBudget, isLocked, weight, isBuffer) VALUES (?,?,?,?,?,?,?,?,?)',
+      c.name, c.allocated, c.spent ?? 0, c.color, c.isActive ? 1 : 0, (c.includedInBudget ?? 1) ? 1 : 0, (c.isLocked ?? 0) ? 1 : 0, c.weight ?? 1, (c.isBuffer ?? 0) ? 1 : 0
     );
     
-    const insertId = res.lastInsertRowId!;
+    const id = res.lastInsertRowId!;
     
-    // Répartition proportionnelle si catégorie budgétée avec allocation > 0
-    if ((c.includedInBudget ?? 1) !== 0 && (c.allocated ?? 0) > 0) {
-      await this.rebalanceAllocations(insertId);
+    // Répartition V2 si catégorie budgétée avec allocation > 0
+    if (((c.includedInBudget ?? 1) !== 0) && (c.allocated ?? 0) !== 0) {
+      await this.rebalanceAllocationsV2(id, c.allocated ?? 0); // old=0 → delta = allocated
     }
     
-    return insertId;
+    return id;
   }
 
   async updateBudgetCategory(id: number, up: Partial<BudgetCategory>): Promise<void> {
     const db = await this.getDb();
+    
+    const before = await db.getFirstAsync<{ allocated:number; includedInBudget:number }>(
+      'SELECT allocated, includedInBudget FROM budget_categories WHERE id = ?', id
+    );
 
     const fields: string[] = [];
     const values: any[] = [];
@@ -428,6 +505,9 @@ class DatabaseService {
     if (up.color      !== undefined) { fields.push('color = ?');      values.push(up.color);      }
     if (up.isActive   !== undefined) { fields.push('isActive = ?');   values.push(up.isActive ? 1 : 0); }
     if (up.includedInBudget !== undefined) { fields.push('includedInBudget = ?'); values.push(up.includedInBudget ? 1 : 0); }
+    if (up.isLocked   !== undefined) { fields.push('isLocked = ?');   values.push(up.isLocked ? 1 : 0); }
+    if (up.weight     !== undefined) { fields.push('weight = ?');     values.push(up.weight ?? 1); }
+    if (up.isBuffer   !== undefined) { fields.push('isBuffer = ?');   values.push(up.isBuffer ? 1 : 0); }
 
     if (fields.length === 0) return;   // rien à mettre à jour
 
@@ -437,13 +517,16 @@ class DatabaseService {
       ...values
     );
     
-    // Répartition proportionnelle si allocation modifiée pour une catégorie budgétée
-    if (up.allocated !== undefined) {
-      const row = await db.getFirstAsync<{ includedInBudget: number }>(
-        'SELECT includedInBudget FROM budget_categories WHERE id = ?', id
-      );
-      if (row?.includedInBudget) {
-        await this.rebalanceAllocations(id);
+    const after = await db.getFirstAsync<{ allocated:number; includedInBudget:number }>(
+      'SELECT allocated, includedInBudget FROM budget_categories WHERE id = ?', id
+    );
+
+    if (after?.includedInBudget) {
+      // si la cat vient d'entrer dans le budget, oldAllocated = 0
+      const oldAlloc = before?.includedInBudget ? (before.allocated ?? 0) : 0;
+      const delta = (after.allocated ?? 0) - oldAlloc;
+      if (delta !== 0) {
+        await this.rebalanceAllocationsV2(id, delta);
       }
     }
   }
