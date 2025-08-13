@@ -3,21 +3,10 @@ import { useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { X, Check, ChevronDown } from 'lucide-react-native';
 import { databaseService } from '@/services/DatabaseService';
 import { useHapticFeedback } from '@/hooks/useHapticFeedback';
-
-const CATEGORIES = [
-  'Alimentation',
-  'Transport',
-  'Sorties',
-  'Shopping',
-  'Santé',
-  'Logement',
-  'Revenus',
-  'Épargne',
-  'Autres'
-];
 
 export default function AddTransactionScreen() {
   const [title, setTitle] = useState('');
@@ -26,20 +15,29 @@ export default function AddTransactionScreen() {
   const [description, setDescription] = useState('');
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [categories, setCategories] = useState<string[]>([]);
 
   const { triggerLight, triggerSuccess, triggerError } = useHapticFeedback();
 
-  // Initialize database when component mounts
-  useEffect(() => {
-    const initDB = async () => {
-      try {
-        await databaseService.initialize();
-      } catch (error) {
-        console.error('Failed to initialize database:', error);
-      }
-    };
-    initDB();
-  }, []);
+  const loadCategories = async () => {
+    try {
+      await databaseService.initialize();
+      // Récupère les catégories actives
+      const cats = await databaseService.getBudgetCategories();
+      // Forcer la présence de "Autres" et "Revenus" pour qu'ils soient toujours disponibles
+      const names = Array.from(new Set([...cats.map(c => c.name), 'Autres', 'Revenus']));
+      setCategories(names);
+    } catch (error) {
+      console.error('loadCategories error:', error);
+    }
+  };
+
+  // Recharge à chaque focus (retour depuis Budget > Ajouter catégorie, par ex.)
+  useFocusEffect(
+    React.useCallback(() => {
+      loadCategories();
+    }, [])
+  );
 
   const handleSave = async () => {
     console.log('🔥 BOUTON CLIQUÉ - handleSave appelé');
@@ -190,7 +188,7 @@ export default function AddTransactionScreen() {
           
           {showCategoryPicker && (
             <View style={styles.categoryPicker}>
-              {CATEGORIES.map((cat) => (
+              {categories.map((cat) => (
                 <TouchableOpacity
                   key={cat}
                   style={styles.categoryOption}
@@ -198,6 +196,16 @@ export default function AddTransactionScreen() {
                   <Text style={styles.categoryOptionText}>{cat}</Text>
                 </TouchableOpacity>
               ))}
+              
+              {/* Option: lien rapide pour créer une catégorie */}
+              <TouchableOpacity
+                style={[styles.categoryOption, { backgroundColor: '#f8fafc' }]}
+                onPress={() => {
+                  setShowCategoryPicker(false);
+                  router.push('/(tabs)/budget');
+                }}>
+                <Text style={[styles.categoryOptionText, { color: '#0891b2' }]}>+ Ajouter une catégorie</Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>

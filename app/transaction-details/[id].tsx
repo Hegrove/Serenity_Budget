@@ -2,22 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { X, Check, ChevronDown, Trash2, CreditCard as Edit3 } from 'lucide-react-native';
 import { databaseService, Transaction } from '@/services/DatabaseService';
 import { useHapticFeedback } from '@/hooks/useHapticFeedback';
 import { formatCurrency, formatDate } from '@/utils/formatters';
-
-const CATEGORIES = [
-  'Alimentation',
-  'Transport',
-  'Sorties',
-  'Shopping',
-  'Santé',
-  'Logement',
-  'Revenus',
-  'Épargne',
-  'Autres'
-];
 
 export default function TransactionDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -30,6 +19,7 @@ export default function TransactionDetailsScreen() {
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [categories, setCategories] = useState<string[]>([]);
 
   const { triggerLight, triggerSuccess, triggerError } = useHapticFeedback();
 
@@ -37,6 +27,27 @@ export default function TransactionDetailsScreen() {
     loadTransaction();
   }, [id]);
 
+  const loadCategories = async (current?: string) => {
+    try {
+      await databaseService.initialize();
+      const cats = await databaseService.getBudgetCategories();
+      let names = Array.from(new Set([...cats.map(c => c.name), 'Autres', 'Revenus']));
+      // Garder la valeur de la transaction si elle n'est pas dans les catégories actives
+      if (current && !names.includes(current)) {
+        names = [current, ...names];
+      }
+      setCategories(names);
+    } catch (error) {
+      console.error('loadCategories error:', error);
+    }
+  };
+
+  // Recharge à chaque focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadCategories(category);
+    }, [category])
+  );
   const loadTransaction = async () => {
     try {
       await databaseService.initialize();
@@ -248,7 +259,7 @@ export default function TransactionDetailsScreen() {
               
               {showCategoryPicker && (
                 <View style={styles.categoryPicker}>
-                  {CATEGORIES.map((cat) => (
+                  {categories.map((cat) => (
                     <TouchableOpacity
                       key={cat}
                       style={styles.categoryOption}
@@ -256,6 +267,16 @@ export default function TransactionDetailsScreen() {
                       <Text style={styles.categoryOptionText}>{cat}</Text>
                     </TouchableOpacity>
                   ))}
+                  
+                  {/* Option: lien rapide pour créer une catégorie */}
+                  <TouchableOpacity
+                    style={[styles.categoryOption, { backgroundColor: '#f8fafc' }]}
+                    onPress={() => {
+                      setShowCategoryPicker(false);
+                      router.push('/(tabs)/budget');
+                    }}>
+                    <Text style={[styles.categoryOptionText, { color: '#0891b2' }]}>+ Ajouter une catégorie</Text>
+                  </TouchableOpacity>
                 </View>
               )}
             </View>

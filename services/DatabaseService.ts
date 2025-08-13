@@ -440,6 +440,16 @@ class DatabaseService {
     await this.insertDefaultCategories();
     await this.insertDefaultSettings();
   }
+
+  /* ----- Helper pour récupérer les noms de catégories ----- */
+
+  async getCategoryNames(): Promise<string[]> {
+    const db = await this.getDb();
+    const rows = await db.getAllAsync<{ name: string }>(
+      'SELECT name FROM budget_categories WHERE isActive = 1 ORDER BY name ASC'
+    );
+    return rows.map(r => r.name);
+  }
 }
 
 export const databaseService = new DatabaseService();
