@@ -5,6 +5,7 @@ import { Settings, ChartPie as PieChart, Plus, CreditCard as Edit3 } from 'lucid
 import { databaseService, BudgetCategory } from '@/services/DatabaseService';
 import { formatCurrency } from '@/utils/formatters';
 import { useHapticFeedback } from '@/hooks/useHapticFeedback';
+import { ADD_CATEGORY_ROUTE } from '@/utils/routes';
 
 export default function BudgetScreen() {
   const [budgetMethod, setBudgetMethod] = useState<'thirds' | 'envelopes'>('thirds');
@@ -16,6 +17,8 @@ export default function BudgetScreen() {
   const [categoryName, setCategoryName] = useState('');
   const [categoryAmount, setCategoryAmount] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [monthlyBudget, setMonthlyBudget] = useState(0);
+  const [budgetOverflow, setBudgetOverflow] = useState(false);
 
   const { triggerLight, triggerSuccess, triggerError } = useHapticFeedback();
 
@@ -56,6 +59,16 @@ export default function BudgetScreen() {
       // Filtrer complètement la catégorie "Revenus" de l'affichage
       const filteredCategories = budgetCategories.filter(cat => cat.name !== 'Revenus');
       setCategories(filteredCategories);
+      
+      // Charger le budget mensuel
+      const budget = await databaseService.getMonthlyBudget();
+      setMonthlyBudget(budget);
+      
+      // Vérifier si les allocations dépassent le budget
+      const sumAllocated = budgetCategories
+        .filter(cat => (cat.includedInBudget ?? 1) === 1)
+        .reduce((sum, cat) => sum + cat.allocated, 0);
+      setBudgetOverflow(sumAllocated > budget + 0.009); // tolérance arrondis
     } catch (error) {
       console.error('Erreur lors du chargement du budget:', error);
     }
@@ -205,15 +218,16 @@ export default function BudgetScreen() {
   };
 
   // Calculer les totaux seulement pour les catégories incluses dans le budget
-  const budgeted = categories.filter(cat => (cat.includedInBudget ?? 1) !== 0);
+  const budgeted = categories.filter(cat => (cat.includedInBudget ?? 1) === 1);
   const unbudgeted = categories.filter(cat => (cat.includedInBudget ?? 1) === 0);
   
+  const budgetedSpent = budgeted.reduce((sum, cat) => sum + cat.spent, 0);
+  const unbudgetedSpent = unbudgeted.reduce((sum, cat) => sum + cat.spent, 0);
+  const displayedSpent = budgetedSpent + unbudgetedSpent;
   const totalAllocated = budgeted.reduce((sum, cat) => sum + cat.allocated, 0);
-  const totalSpent = budgeted.reduce((sum, cat) => sum + cat.spent, 0);
-  const totalRemaining = totalAllocated - totalSpent;
+  const totalRemaining = totalAllocated - budgetedSpent;
   
-  // Total des dépenses hors budget
-  const unbudgetedTotal = unbudgeted.reduce((sum, cat) => sum + cat.spent, 0);
+  const progress = monthlyBudget > 0 ? budgetedSpent / monthlyBudget : 0;
 
   const renderCategoryCard = (category: BudgetCategory) => {
     const percentage = category.allocated > 0 ? (category.spent / category.allocated) * 100 : 0;
@@ -308,6 +322,19 @@ export default function BudgetScreen() {
         ) : (
           <>
             {/* Résumé du budget */}
+            {/* Alerte si allocations > budget */}
+            {budgetOverflow && (
+              <View style={styles.alertCard}>
+                <Text style={styles.alertTitle}>⚠️ Budget dépassé</Text>
+                <Text style={styles.alertText}>
+                  Alloué: {formatCurrency(totalAllocated)} • Budget: {formatCurrency(monthlyBudget)}
+                </Text>
+                <Text style={styles.alertHint}>
+                  Augmentez le budget ou ajustez les allocations par catégorie.
+                </Text>
+              </View>
+            )}
+
             <View style={styles.summaryCard}>
               <View style={styles.summaryHeader}>
                 <PieChart size={24} color="#0891b2" />
@@ -320,7 +347,7 @@ export default function BudgetScreen() {
                 </View>
                 <View style={styles.summaryStatItem}>
                   <Text style={styles.summaryStatLabel}>Dépensé</Text>
-                  <Text style={styles.summaryStatValue}>{formatCurrency(totalSpent)}</Text>
+                  <Text style={styles.summaryStatValue}>{formatCurrency(displayedSpent)}</Text>
                 </View>
                 <View style={styles.summaryStatItem}>
                   <Text style={styles.summaryStatLabel}>Restant</Text>
@@ -329,6 +356,11 @@ export default function BudgetScreen() {
                   </Text>
                 </View>
               </View>
+              {unbudgetedSpent > 0 && (
+                <Text style={styles.summaryNote}>
+                  dont hors budget : {formatCurrency(unbudgetedSpent)}
+                </Text>
+              )}
             </View>
 
             {/* Actions rapides */}
@@ -365,9 +397,20 @@ export default function BudgetScreen() {
                 <>
                   <Text style={[styles.sectionTitle, { marginTop: 32 }]}>Dépenses non budgétées</Text>
                   <Text style={styles.sectionSubtitle}>
-                    Total des dépenses hors budget : {formatCurrency(unbudgetedTotal)}
+                    Total des dépenses hors budget : {formatCurrency(unbudgetedSpent)}
                   </Text>
-                  {unbudgeted.map(renderCategoryCard)}
+                  {unbudgeted.map(cat => (
+                    <TouchableOpacity 
+                      key={cat.id} 
+                      style={styles.categoryRowUnbudgeted}
+                      onPress={() => handleEditCategory(cat)}>
+                      <View style={[styles.categoryDot, { backgroundColor: cat.color }]} />
+                      <Text style={styles.categoryRowName}>{cat.name}</Text>
+                      <View style={{ flex: 1 }} />
+                      <Text style={styles.categoryRowAmount}>{formatCurrency(cat.spent || 0)}</Text>
+                      <Edit3 size={16} color="#64748b" style={{ marginLeft: 8 }} />
+                    </TouchableOpacity>
+                  ))}
                 </>
               )}
             </View>
@@ -722,6 +765,63 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginBottom: 16,
     marginTop: -8,
+  },
+  categoryRowUnbudgeted: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    borderLeftWidth: 3,
+    borderLeftColor: '#f59e0b',
+  },
+  categoryRowName: {
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+    color: '#1e293b',
+  },
+  categoryRowAmount: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1e293b',
+  },
+  summaryNote: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#64748b',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  alertCard: {
+    backgroundColor: '#fef3c7',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#fbbf24',
+  },
+  alertTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#92400e',
+    marginBottom: 8,
+  },
+  alertText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#92400e',
+    marginBottom: 4,
+  },
+  alertHint: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#92400e',
   },
   modalContainer: {
     flex: 1,

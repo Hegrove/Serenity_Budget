@@ -7,6 +7,7 @@ import { X, Check, ChevronDown, Trash2, CreditCard as Edit3 } from 'lucide-react
 import { databaseService, Transaction } from '@/services/DatabaseService';
 import { useHapticFeedback } from '@/hooks/useHapticFeedback';
 import { formatCurrency, formatDate } from '@/utils/formatters';
+import { ADD_CATEGORY_ROUTE } from '@/utils/routes';
 
 export default function TransactionDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -32,7 +33,6 @@ export default function TransactionDetailsScreen() {
       await databaseService.initialize();
       const cats = await databaseService.getBudgetCategories();
       let names = Array.from(new Set([...cats.map(c => c.name), 'Autres', 'Revenus']));
-      // Garder la valeur de la transaction si elle n'est pas dans les catégories actives
       if (current && !names.includes(current)) {
         names = [current, ...names];
       }
@@ -42,7 +42,6 @@ export default function TransactionDetailsScreen() {
     }
   };
 
-  // Recharge à chaque focus
   useFocusEffect(
     React.useCallback(() => {
       loadCategories(category);
@@ -273,7 +272,7 @@ export default function TransactionDetailsScreen() {
                     style={[styles.categoryOption, { backgroundColor: '#f8fafc' }]}
                     onPress={() => {
                       setShowCategoryPicker(false);
-                      router.push('/(tabs)/budget');
+                      router.push(ADD_CATEGORY_ROUTE);
                     }}>
                     <Text style={[styles.categoryOptionText, { color: '#0891b2' }]}>+ Ajouter une catégorie</Text>
                   </TouchableOpacity>

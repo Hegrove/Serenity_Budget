@@ -14,6 +14,9 @@ export default function HomeScreen() {
   const [progressionBudget, setProgressionBudget] = useState(0);
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
   const [unbudgetedSpent, setUnbudgetedSpent] = useState(0);
+  const [budgetOverflow, setBudgetOverflow] = useState(false);
+  const [monthlyBudget, setMonthlyBudget] = useState(0);
+  const [totalAllocated, setTotalAllocated] = useState(0);
 
   useEffect(() => {
     initializeData();
@@ -50,6 +53,16 @@ export default function HomeScreen() {
         .filter(cat => (cat.includedInBudget ?? 1) === 0 && cat.name !== 'Revenus')
         .reduce((sum, cat) => sum + cat.spent, 0);
       setUnbudgetedSpent(total);
+      
+      // Charger le budget mensuel et vérifier les dépassements
+      const budget = await databaseService.getMonthlyBudget();
+      setMonthlyBudget(budget);
+      
+      const sumAllocated = budgetCategories
+        .filter(cat => (cat.includedInBudget ?? 1) === 1)
+        .reduce((sum, cat) => sum + cat.allocated, 0);
+      setTotalAllocated(sumAllocated);
+      setBudgetOverflow(sumAllocated > budget + 0.009); // tolérance arrondis
     } catch (error) {
       console.error('Erreur lors du chargement des données:', error);
     }
@@ -170,6 +183,19 @@ export default function HomeScreen() {
             </View>
           </View>
         </View>
+
+        {/* Alerte si allocations > budget */}
+        {budgetOverflow && (
+          <View style={styles.alertCard}>
+            <Text style={styles.alertTitle}>⚠️ Budget dépassé</Text>
+            <Text style={styles.alertText}>
+              Alloué: {formatCurrency(totalAllocated)} • Budget: {formatCurrency(monthlyBudget)}
+            </Text>
+            <Text style={styles.alertHint}>
+              Augmentez le budget ou ajustez les allocations par catégorie.
+            </Text>
+          </View>
+        )}
 
         {/* Dépenses non budgétées */}
         {unbudgetedSpent > 0 && (
@@ -556,5 +582,35 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     color: '#92400e',
     lineHeight: 20,
+  },
+  alertCard: {
+    backgroundColor: '#fef3c7',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#fbbf24',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  alertTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#92400e',
+    marginBottom: 8,
+  },
+  alertText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#92400e',
+    marginBottom: 4,
+  },
+  alertHint: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#92400e',
   },
 });

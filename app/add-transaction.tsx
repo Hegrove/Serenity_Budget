@@ -7,6 +7,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { X, Check, ChevronDown } from 'lucide-react-native';
 import { databaseService } from '@/services/DatabaseService';
 import { useHapticFeedback } from '@/hooks/useHapticFeedback';
+import { ADD_CATEGORY_ROUTE } from '@/utils/routes';
 
 export default function AddTransactionScreen() {
   const [title, setTitle] = useState('');
@@ -22,9 +23,7 @@ export default function AddTransactionScreen() {
   const loadCategories = async () => {
     try {
       await databaseService.initialize();
-      // Récupère les catégories actives
       const cats = await databaseService.getBudgetCategories();
-      // Forcer la présence de "Autres" et "Revenus" pour qu'ils soient toujours disponibles
       const names = Array.from(new Set([...cats.map(c => c.name), 'Autres', 'Revenus']));
       setCategories(names);
     } catch (error) {
@@ -32,7 +31,6 @@ export default function AddTransactionScreen() {
     }
   };
 
-  // Recharge à chaque focus (retour depuis Budget > Ajouter catégorie, par ex.)
   useFocusEffect(
     React.useCallback(() => {
       loadCategories();
@@ -202,7 +200,7 @@ export default function AddTransactionScreen() {
                 style={[styles.categoryOption, { backgroundColor: '#f8fafc' }]}
                 onPress={() => {
                   setShowCategoryPicker(false);
-                  router.push('/(tabs)/budget');
+                  router.push(ADD_CATEGORY_ROUTE);
                 }}>
                 <Text style={[styles.categoryOptionText, { color: '#0891b2' }]}>+ Ajouter une catégorie</Text>
               </TouchableOpacity>
