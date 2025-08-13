@@ -310,9 +310,9 @@ class DatabaseService {
     }
 
     // Sauvegarde atomique
-    await db.withTransactionAsync(async (tx) => {
+    await db.withTransactionAsync(async () => {
       for (const c of cats) {
-        await tx.runAsync(
+        await db.runAsync(
           `UPDATE budget_categories SET allocated = ? WHERE id = ?`,
           c.allocated, c.id
         );
