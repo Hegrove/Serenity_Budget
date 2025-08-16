@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Bell, Award, TrendingUp, TrendingDown } from 'lucide-react-native';
+import { Bell, Award, TrendingUp, TrendingDown, LogOut } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import { useAuth } from '@/hooks/useAuth';
 import { databaseService, Transaction } from '@/services/DatabaseService';
 import { formatCurrency, formatDate } from '@/utils/formatters';
+import { useHapticFeedback } from '@/hooks/useHapticFeedback';
 
 export default function HomeScreen() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const { triggerLight } = useHapticFeedback();
   const [refreshing, setRefreshing] = useState(false);
   const [soldeDisponible, setSoldeDisponible] = useState(0);
   const [resteAujourdhui, setResteAujourdhui] = useState(0);
@@ -76,6 +79,12 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
+  const handleLogout = async () => {
+    triggerLight();
+    await logout();
+    router.replace('/onboarding');
+  };
+
   // Utiliser useFocusEffect pour recharger les données quand on revient sur l'écran
   const { useFocusEffect } = require('@react-navigation/native');
   
@@ -122,6 +131,9 @@ export default function HomeScreen() {
           <View style={styles.headerActions}>
             <TouchableOpacity style={styles.iconButton}>
               <Award size={24} color="#64748b" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.iconButton} onPress={handleLogout}>
+              <LogOut size={24} color="#64748b" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.iconButton}>
               <Bell size={24} color="#64748b" />
