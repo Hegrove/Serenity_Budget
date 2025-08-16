@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, Check } from 'lucide-react-native';
+import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, Check, ArrowRight } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { authService } from '@/services/AuthService';
 import { useHapticFeedback } from '@/hooks/useHapticFeedback';
