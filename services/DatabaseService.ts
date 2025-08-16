@@ -269,6 +269,8 @@ class DatabaseService {
     const buffer = cats.find(c => c.isBuffer === 1 && c.id !== protectedId);
     const adjustable = cats.filter(c => c.id !== protectedId && c.isLocked !== 1 && c.isBuffer !== 1);
 
+    // On va collecter seulement les lignes à MAJ
+    const updates: Array<{ id: number; allocated: number }> = [];
     // Besoin d'argent (delta > 0)
     if (delta > 0) {
       let remaining = +delta.toFixed(2);
@@ -277,6 +279,7 @@ class DatabaseService {
         const take = Math.min(remaining, buffer.allocated);
         buffer.allocated = +(buffer.allocated - take).toFixed(2);
         remaining = +(remaining - take).toFixed(2);
+        updates.push({ id: buffer.id, allocated: buffer.allocated });
       }
 
       if (remaining > 0 && adjustable.length > 0) {
@@ -288,6 +291,7 @@ class DatabaseService {
           give = Math.min(give, c.allocated); // ne pas passer < 0
           c.allocated = +(c.allocated - give).toFixed(2);
           acc = +(acc + give).toFixed(2);
+          updates.push({ id: c.id, allocated: c.allocated });
         });
       }
     }
@@ -297,6 +301,7 @@ class DatabaseService {
       const freed = +(-delta).toFixed(2);
       if (buffer) {
         buffer.allocated = +(buffer.allocated + freed).toFixed(2);
+        updates.push({ id: buffer.id, allocated: buffer.allocated });
       } else if (adjustable.length > 0) {
         const totalWeight = adjustable.reduce((s, c) => s + (c.weight || 1), 0) || 1;
         let acc = 0;
@@ -305,28 +310,36 @@ class DatabaseService {
           const add = i === adjustable.length - 1 ? +(freed - acc).toFixed(2) : +raw.toFixed(2);
           c.allocated = +(c.allocated + add).toFixed(2);
           acc = +(acc + add).toFixed(2);
+          updates.push({ id: c.id, allocated: c.allocated });
         });
       }
     }
 
-    // Sauvegarde atomique
-    await db.withTransactionAsync(async () => {
-      for (const c of cats) {
-        await db.runAsync(
-          `UPDATE budget_categories SET allocated = ? WHERE id = ?`,
-          c.allocated, c.id
-        );
-      }
-    });
+    // Écrire en transaction (db.*, pas tx.*)
+    if (updates.length) {
+      await db.withTransactionAsync(async () => {
+        for (const u of updates) {
+          if (u.id == null || !Number.isFinite(u.allocated)) {
+            throw new Error(`Rebalance: invalid update payload id=${u.id} allocated=${u.allocated}`);
+          }
+          console.log('SQL UPDATE budget_categories SET allocated = ? WHERE id = ?', u.allocated, u.id);
+          await db.runAsync('UPDATE budget_categories SET allocated = ? WHERE id = ?', u.allocated, u.id);
+        }
+      });
+    }
 
-    // Correction arrondis : forcer Σ = B
-    const total = (await db.getFirstAsync<{ s:number }>(
-      `SELECT IFNULL(SUM(allocated),0) as s FROM budget_categories WHERE isActive=1 AND includedInBudget=1`
-    ))?.s || 0;
+    // Correction arrondis → forcer Σ = B (en favorisant le tampon, sinon la protégée)
+    const row = await db.getFirstAsync<{ s: number }>(
+      `SELECT IFNULL(SUM(allocated),0) as s
+       FROM budget_categories WHERE isActive=1 AND includedInBudget=1`
+    );
+    const total = row?.s ?? 0;
     const diff = +(B - total).toFixed(2);
     if (Math.abs(diff) >= 0.01) {
       const target = buffer ?? prot;
-      await db.runAsync(`UPDATE budget_categories SET allocated = ? WHERE id = ?`, +(target.allocated + diff).toFixed(2), target.id);
+      const newAlloc = +(target.allocated + diff).toFixed(2);
+      console.log('SQL FIX SUM → UPDATE budget_categories SET allocated = ? WHERE id = ?', newAlloc, target.id);
+      await db.runAsync('UPDATE budget_categories SET allocated = ? WHERE id = ?', newAlloc, target.id);
     }
   }
 
@@ -478,8 +491,18 @@ class DatabaseService {
   async addBudgetCategory(c: Omit<BudgetCategory, 'id'>): Promise<number> {
     const db = await this.getDb();
     const res = await db.runAsync(
-      'INSERT INTO budget_categories (name, allocated, spent, color, isActive, includedInBudget, isLocked, weight, isBuffer) VALUES (?,?,?,?,?,?,?,?,?)',
-      c.name, c.allocated, c.spent ?? 0, c.color, c.isActive ? 1 : 0, (c.includedInBudget ?? 1) ? 1 : 0, (c.isLocked ?? 0) ? 1 : 0, c.weight ?? 1, (c.isBuffer ?? 0) ? 1 : 0
+      `INSERT INTO budget_categories
+       (name, allocated, spent, color, isActive, includedInBudget, isLocked, weight, isBuffer)
+       VALUES (?,?,?,?,?,?,?,?,?)`,
+      c.name,
+      c.allocated ?? 0,
+      c.spent ?? 0,
+      c.color ?? '#0891b2',
+      c.isActive ? 1 : 0,
+      (c.includedInBudget ?? 1) ? 1 : 0,
+      (c.isLocked ?? 0) ? 1 : 0,
+      c.weight ?? 1,
+      (c.isBuffer ?? 0) ? 1 : 0
     );
     
     const id = res.lastInsertRowId!;
@@ -514,7 +537,12 @@ class DatabaseService {
 
     if (fields.length === 0) return;   // rien à mettre à jour
 
+    // ⚠️ AJOUTE L'ID
     values.push(id);
+
+    // 🔒 Log utile
+    console.log('SQL UPDATE budget_categories SET', fields.join(', '), 'WHERE id = ?', values);
+
     await db.runAsync(
       `UPDATE budget_categories SET ${fields.join(', ')} WHERE id = ?`,
       ...values
