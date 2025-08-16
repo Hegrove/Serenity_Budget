@@ -3,10 +3,12 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Bell, Award, TrendingUp, TrendingDown } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '@/hooks/useAuth';
 import { databaseService, Transaction } from '@/services/DatabaseService';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 
 export default function HomeScreen() {
+  const { user } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   const [soldeDisponible, setSoldeDisponible] = useState(0);
   const [resteAujourdhui, setResteAujourdhui] = useState(0);
@@ -114,7 +116,7 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Bonjour ! 👋</Text>
+            <Text style={styles.greeting}>Bonjour {user?.firstName} ! 👋</Text>
             <Text style={styles.subtitle}>Voici votre situation financière</Text>
           </View>
           <View style={styles.headerActions}>
