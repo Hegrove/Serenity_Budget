@@ -44,24 +44,23 @@ class DatabaseService {
   private initializationPromise: Promise<void> | null = null;
   private isInitialized = false;
 
-  /* ----- Init ----- */
-
   async initialize() {
-    if (this.isInitialized && this.db) return;          // déjà prêt
-    if (this.initializationPromise) return this.initializationPromise;  // en cours
+    if (this.isInitialized && this.db) return;
+    if (this.initializationPromise) return this.initializationPromise;
 
     this.initializationPromise = this.performInitialization();
-    try {
-      await this.initializationPromise;
-    } finally {
-      this.initializationPromise = null;
-    }
+    try { await this.initializationPromise; }
+    finally { this.initializationPromise = null; }
   }
 
   private async performInitialization() {
     try {
       const db = await SQLite.openDatabaseAsync('serenite_budget.db');
       this.db = db;
+
+      // (optionnel) quelques pragmas tolérés
+      // await db.execAsync('PRAGMA journal_mode = WAL');
+
       await this.createSchema(db);
       this.isInitialized = true;
       console.log('Database initialized');
@@ -77,8 +76,6 @@ class DatabaseService {
     if (!this.db) throw new Error('Database unavailable');
     return this.db;
   }
-
-  /* ----- Schema ----- */
 
   // Tout ce qui suit est appelé UNIQUEMENT depuis performInitialization(db)
   private async createSchema(db: SQLite.SQLiteDatabase) {
@@ -104,7 +101,7 @@ class DatabaseService {
         spent REAL DEFAULT 0,
         color TEXT NOT NULL,
         isActive INTEGER DEFAULT 1,
-        includedInBudget INTEGER DEFAULT 1,
+        includedInBudget INTEGER DEFAULT 1, -- colonnes "nouvelles" déjà là pour new installs
         isLocked INTEGER DEFAULT 0,
         weight REAL DEFAULT 1,
         isBuffer INTEGER DEFAULT 0
@@ -129,16 +126,16 @@ class DatabaseService {
         budgetMethod TEXT DEFAULT 'thirds',
         currency TEXT DEFAULT 'EUR',
         notifications INTEGER DEFAULT 1,
-        biometricEnabled INTEGER DEFAULT 0
+        biometricEnabled INTEGER DEFAULT 0,
         monthlyBudget REAL
       );
     `);
 
     // 2) Migrations "safe" (anciennes installs) → une par une
     try { await db.execAsync(`ALTER TABLE budget_categories ADD COLUMN includedInBudget INTEGER DEFAULT 1`); } catch {}
-    try { await db.execAsync(`ALTER TABLE budget_categories ADD COLUMN isLocked INTEGER DEFAULT 0;`); } catch {}
-    try { await db.execAsync(`ALTER TABLE budget_categories ADD COLUMN weight REAL DEFAULT 1;`); } catch {}
-    try { await db.execAsync(`ALTER TABLE budget_categories ADD COLUMN isBuffer INTEGER DEFAULT 0;`); } catch {}
+    try { await db.execAsync(`ALTER TABLE budget_categories ADD COLUMN isLocked INTEGER DEFAULT 0`); } catch {}
+    try { await db.execAsync(`ALTER TABLE budget_categories ADD COLUMN weight REAL DEFAULT 1`); } catch {}
+    try { await db.execAsync(`ALTER TABLE budget_categories ADD COLUMN isBuffer INTEGER DEFAULT 0`); } catch {}
     try { await db.execAsync(`ALTER TABLE user_settings ADD COLUMN monthlyBudget REAL`); } catch {}
 
     // 3) Données par défaut (toujours via ce db)
