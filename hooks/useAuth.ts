@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AuthState, User } from '@/services/AuthService';
 import { authService } from '@/services/AuthService';
 
 export function useAuth() {
+  const isMountedRef = useRef(true);
   const [authState, setAuthState] = useState<AuthState>({
     isAuthenticated: false,
     user: null,
@@ -10,22 +11,28 @@ export function useAuth() {
   });
 
   useEffect(() => {
+    isMountedRef.current = true;
+    
     // Vérifier l'état d'authentification au démarrage
     const checkAuthState = async () => {
       try {
         const user = await authService.getCurrentUser();
-        setAuthState({
-          isAuthenticated: user !== null,
-          user,
-          isLoading: false,
-        });
+        if (isMountedRef.current) {
+          setAuthState({
+            isAuthenticated: user !== null,
+            user,
+            isLoading: false,
+          });
+        }
       } catch (error) {
         console.error('Erreur lors de la vérification de l\'authentification:', error);
-        setAuthState({
-          isAuthenticated: false,
-          user: null,
-          isLoading: false,
-        });
+        if (isMountedRef.current) {
+          setAuthState({
+            isAuthenticated: false,
+            user: null,
+            isLoading: false,
+          });
+        }
       }
     };
 
@@ -33,12 +40,15 @@ export function useAuth() {
 
     // S'abonner aux changements d'état d'authentification
     const handleAuthChange = (newState: AuthState) => {
-      setAuthState(newState);
+      if (isMountedRef.current) {
+        setAuthState(newState);
+      }
     };
 
     authService.addAuthListener(handleAuthChange);
 
     return () => {
+      isMountedRef.current = false;
       authService.removeAuthListener(handleAuthChange);
     };
   }, []);
