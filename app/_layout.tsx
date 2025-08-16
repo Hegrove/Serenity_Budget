@@ -41,14 +41,13 @@ export default function RootLayout() {
   return (
     <>
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="auth" />
+        <Stack.Screen name="auth/login" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="auth/register" options={{ gestureEnabled: false }} />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="transaction-details/[id]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="add-transaction" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="auth/login" options={{ gestureEnabled: false }} />
-        <Stack.Screen name="auth/register" options={{ gestureEnabled: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />
