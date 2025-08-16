@@ -60,17 +60,19 @@ class DatabaseService {
 
   private async performInitialization() {
     try {
-      this.db = await SQLite.openDatabaseAsync('serenite_budget.db');
-      await this.createTables();
+      const db = await SQLite.openDatabaseAsync('serenite_budget.db');
+      this.db = db;
+      await this.createSchema(db);
       this.isInitialized = true;
       console.log('Database initialized');
     } catch (error: any) {
-      console.error('Database init failed →', error.message, error.code, error);
-      throw new Error(`DB init error: ${error.message || 'unknown'}`);
+      console.error('Database init failed →', error);
+      throw new Error(`DB init error: ${error?.message || 'unknown'}`);
     }
   }
 
   private async getDb(): Promise<SQLite.SQLiteDatabase> {
+    // ⚠️ getDb ne doit JAMAIS être appelé depuis createSchema/insertDefaults
     await this.initialize();
     if (!this.db) throw new Error('Database unavailable');
     return this.db;
@@ -78,11 +80,9 @@ class DatabaseService {
 
   /* ----- Schema ----- */
 
-  private async createTables() {
-    if (!this.db) throw new Error('Database not opened');
-    const db = this.db;
-
-    // Create tables individually to avoid native execution issues
+  // Tout ce qui suit est appelé UNIQUEMENT depuis performInitialization(db)
+  private async createSchema(db: SQLite.SQLiteDatabase) {
+    // 1) CREATE TABLE (une par une)
     await db.execAsync(`
       CREATE TABLE IF NOT EXISTS transactions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,7 +93,7 @@ class DatabaseService {
         description TEXT,
         isShared INTEGER DEFAULT 0,
         createdAt TEXT DEFAULT CURRENT_TIMESTAMP
-      )
+      );
     `);
 
     await db.execAsync(`
@@ -104,8 +104,11 @@ class DatabaseService {
         spent REAL DEFAULT 0,
         color TEXT NOT NULL,
         isActive INTEGER DEFAULT 1,
-        includedInBudget INTEGER DEFAULT 1
-      )
+        includedInBudget INTEGER DEFAULT 1,
+        isLocked INTEGER DEFAULT 0,
+        weight REAL DEFAULT 1,
+        isBuffer INTEGER DEFAULT 0
+      );
     `);
 
     await db.execAsync(`
@@ -117,7 +120,7 @@ class DatabaseService {
         targetDate TEXT NOT NULL,
         isActive INTEGER DEFAULT 1,
         createdAt TEXT DEFAULT CURRENT_TIMESTAMP
-      )
+      );
     `);
 
     await db.execAsync(`
@@ -127,46 +130,33 @@ class DatabaseService {
         currency TEXT DEFAULT 'EUR',
         notifications INTEGER DEFAULT 1,
         biometricEnabled INTEGER DEFAULT 0
-      )
+        monthlyBudget REAL
+      );
     `);
 
-    // Ajout de la colonne includedInBudget (si absente)
-    try { 
-      await db.execAsync(`ALTER TABLE budget_categories ADD COLUMN includedInBudget INTEGER DEFAULT 1;`); 
-    } catch (e) {
-      // ignore si la colonne existe déjà
-    }
-
-    // Ajout du budget mensuel global (si absent)
-    try { 
-      await db.execAsync(`ALTER TABLE user_settings ADD COLUMN monthlyBudget REAL;`); 
-    } catch (e) {
-      // ignore si la colonne existe déjà
-    }
-
-    // Colonnes supplémentaires (safe migrations)
+    // 2) Migrations "safe" (anciennes installs) → une par une
+    try { await db.execAsync(`ALTER TABLE budget_categories ADD COLUMN includedInBudget INTEGER DEFAULT 1`); } catch {}
     try { await db.execAsync(`ALTER TABLE budget_categories ADD COLUMN isLocked INTEGER DEFAULT 0;`); } catch {}
     try { await db.execAsync(`ALTER TABLE budget_categories ADD COLUMN weight REAL DEFAULT 1;`); } catch {}
     try { await db.execAsync(`ALTER TABLE budget_categories ADD COLUMN isBuffer INTEGER DEFAULT 0;`); } catch {}
+    try { await db.execAsync(`ALTER TABLE user_settings ADD COLUMN monthlyBudget REAL`); } catch {}
 
-    // Initialise monthlyBudget si vide : somme des allocations budgétées actuelles
+    // 3) Données par défaut (toujours via ce db)
+    await this.insertDefaultCategories(db);
+    await this.insertDefaultSettings(db);
+
+    // 4) Backfill monthlyBudget si vide
     await db.execAsync(`
       UPDATE user_settings SET monthlyBudget = (
         SELECT IFNULL(SUM(allocated), 0)
         FROM budget_categories
         WHERE isActive = 1 AND includedInBudget = 1
       )
-      WHERE (monthlyBudget IS NULL OR monthlyBudget = 0)
+      WHERE monthlyBudget IS NULL OR monthlyBudget = 0
     `);
-
-    await this.insertDefaultCategories();
-    await this.insertDefaultSettings();
   }
 
-  private async insertDefaultCategories() {
-    if (!this.db) throw new Error('Database not opened');
-    const db = this.db;
-
+  private async insertDefaultCategories(db: SQLite.SQLiteDatabase) {
     const defaults = [
       { name: 'Alimentation', allocated: 400, color: '#059669', included: 1 },
       { name: 'Transport',    allocated: 200, color: '#0891b2', included: 1 },
@@ -175,7 +165,7 @@ class DatabaseService {
       { name: 'Santé',        allocated:  80, color: '#f59e0b', included: 1 },
       { name: 'Logement',     allocated:  0,  color: '#3b82f6', included: 1 },
       { name: 'Revenus',      allocated:  0,  color: '#10b981', included: 1 },
-      { name: 'Épargne',      allocated: 200, color: '#10b981', included: 1 },
+      { name: 'Epargne',      allocated: 200, color: '#10b981', included: 1 },
       { name: 'Imprévus',     allocated:   0, color: '#64748b', included: 1 }, // tampon
       { name: 'Autres',       allocated:   0, color: '#94a3b8', included: 0 }, // hors budget
     ];
@@ -184,32 +174,23 @@ class DatabaseService {
       await db.runAsync(
         `INSERT OR IGNORE INTO budget_categories
          (name, allocated, spent, color, isActive, includedInBudget, isLocked, weight, isBuffer)
-         VALUES (?, ?, 0, ?, 1, ?, 0, 1, CASE WHEN ?='Imprévus' THEN 1 ELSE 0 END)`,
-        c.name, c.allocated, c.color, c.included, c.name
+         VALUES (?, ?, 0, ?, 1, ?, 0, 1, ?)`,
+        c.name, c.allocated, c.color, c.included, c.name === 'Imprévus' ? 1 : 0
       );
     }
 
-    // Normalisation de "Autres"
-    await db.runAsync(
-      `UPDATE budget_categories
-       SET includedInBudget = 0, allocated = 0, isActive = 1
-       WHERE name = 'Autres'`
-    );
-
-    // S'assurer qu'Imprévus est bien configuré comme tampon
+    // Normalisations utiles
+    await db.runAsync(`UPDATE budget_categories SET includedInBudget = 0, allocated = 0 WHERE name = 'Autres'`);
     await db.runAsync(`UPDATE budget_categories SET isBuffer = 1 WHERE name = 'Imprévus'`);
   }
 
-  private async insertDefaultSettings() {
-    if (!this.db) throw new Error('Database not opened');
-    const db = this.db;
-    const [{ count }] = await db.getAllAsync<{ count: number }>(
-      'SELECT COUNT(*) as count FROM user_settings'
-    );
-
-    if (count === 0) {
+  private async insertDefaultSettings(db: SQLite.SQLiteDatabase) {
+    // si pas de settings → en créer un
+    const row = await db.getFirstAsync<{ count: number }>(`SELECT COUNT(*) as count FROM user_settings`);
+    if (!row || row.count === 0) {
       await db.runAsync(
-        'INSERT INTO user_settings (id, budgetMethod, currency, notifications, biometricEnabled) VALUES (1, ?, ?, ?, ?)',
+        `INSERT INTO user_settings (id, budgetMethod, currency, notifications, biometricEnabled, monthlyBudget)
+         VALUES (1, ?, ?, ?, ?, NULL)`,
         'thirds', 'EUR', 1, 0
       );
     }
