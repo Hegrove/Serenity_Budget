@@ -1,4 +1,15 @@
 import { supabase } from '@/lib/supabase';
+
+// Diagnostic Supabase
+const url = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+const key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+try {
+  const ref = new URL(url).host.split('.')[0];
+  console.log('[SUPABASE] project-ref =', ref, 'anon head =', key?.slice(0,8));
+} catch (e) {
+  console.log('[SUPABASE] Config error:', e);
+}
+
 import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import { databaseService } from './DatabaseService';
 
