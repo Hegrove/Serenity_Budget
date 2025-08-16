@@ -21,6 +21,8 @@ export default function RegisterScreen() {
   const { triggerLight, triggerSuccess, triggerError } = useHapticFeedback();
 
   const validateForm = (): { isValid: boolean; message?: string } => {
+    console.log('validateForm appelé avec:', { firstName, lastName, email, password, confirmPassword, acceptedTerms });
+    
     if (!firstName.trim() || !lastName.trim() || !email.trim() || !password.trim() || !confirmPassword.trim()) {
       return { isValid: false, message: 'Tous les champs sont obligatoires' };
     }
@@ -37,9 +39,13 @@ export default function RegisterScreen() {
   };
 
   const handleRegister = async () => {
+    console.log('handleRegister appelé');
+    
     if (isLoading) return;
 
     const validation = validateForm();
+    console.log('Validation result:', validation);
+    
     if (!validation.isValid) {
       triggerError();
       Alert.alert('Erreur de validation', validation.message);
@@ -50,7 +56,9 @@ export default function RegisterScreen() {
     triggerLight();
 
     try {
+      console.log('Tentative de création de compte...');
       const result = await authService.register(email, password, firstName, lastName);
+      console.log('Résultat de l\'inscription:', result);
       
       if (result.success) {
         triggerSuccess();
@@ -70,7 +78,7 @@ export default function RegisterScreen() {
       }
     } catch (error) {
       triggerError();
-      console.error('Erreur lors de l\'inscription:', error);
+      console.error('Erreur lors de l\'inscription (catch):', error);
       Alert.alert('Erreur', 'Une erreur inattendue s\'est produite');
     } finally {
       setIsLoading(false);
