@@ -17,33 +17,20 @@ export default function TransactionsScreen() {
 
   const categories = ['Toutes', 'Alimentation', 'Transport', 'Sorties', 'Shopping', 'Santé', 'Logement', 'Épargne', 'Revenus', 'Autres'];
 
-  useEffect(() => {
-    loadTransactions();
-  }, []);
-
-
-
-
-  // Recharger les données quand on revient sur l'écran
   useFocusEffect(
     React.useCallback(() => {
-      let isActive = true;
-
       const load = async () => {
         try {
           await databaseService.initialize();
           const data = await databaseService.getTransactions();
-          if (isActive) {
-            console.log('Transactions rechargées:', data.length);
-            setTransactions(data);
-          }
+          console.log('Transactions rechargées:', data.length);
+          setTransactions(data);
         } catch (error) {
           console.error('Erreur lors du rechargement:', error);
         }
       };
 
       load();
-      return () => { isActive = false; };
     }, [])
   );
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Settings, ChartPie as PieChart, Plus, CreditCard as Edit3 } from 'lucide-react-native';
 import { databaseService, BudgetCategory } from '@/services/DatabaseService';
 import { formatCurrency } from '@/utils/formatters';
@@ -22,13 +23,6 @@ export default function BudgetScreen() {
 
   const { triggerLight, triggerSuccess, triggerError } = useHapticFeedback();
 
-  useEffect(() => {
-    initializeData();
-  }, []);
-
-  // Recharger les données quand on revient sur l'écran
-  const { useFocusEffect } = require('@react-navigation/native');
-  
   useFocusEffect(
     React.useCallback(() => {
       const recalculateAndLoad = async () => {
@@ -43,15 +37,6 @@ export default function BudgetScreen() {
       recalculateAndLoad();
     }, [])
   );
-
-  const initializeData = async () => {
-    try {
-      await databaseService.initialize();
-      await loadBudgetData();
-    } catch (error) {
-      console.error('Erreur lors de l\'initialisation:', error);
-    }
-  };
 
   const loadBudgetData = async () => {
     try {

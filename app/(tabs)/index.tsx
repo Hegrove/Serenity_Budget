@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Bell, Award, TrendingUp, TrendingDown, LogOut } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -22,19 +23,6 @@ export default function HomeScreen() {
   const [budgetOverflow, setBudgetOverflow] = useState(false);
   const [monthlyBudget, setMonthlyBudget] = useState(0);
   const [totalAllocated, setTotalAllocated] = useState(0);
-
-  useEffect(() => {
-    initializeData();
-  }, []);
-
-  const initializeData = async () => {
-    try {
-      await databaseService.initialize();
-      await loadData();
-    } catch (error) {
-      console.error('Erreur lors de l\'initialisation:', error);
-    }
-  };
 
   const loadData = async () => {
     try {
@@ -85,12 +73,8 @@ export default function HomeScreen() {
     router.replace('/onboarding');
   };
 
-  // Utiliser useFocusEffect pour recharger les données quand on revient sur l'écran
-  const { useFocusEffect } = require('@react-navigation/native');
-  
   useFocusEffect(
     React.useCallback(() => {
-      let mounted = true;
       const load = async () => {
         try {
           await databaseService.initialize();
@@ -100,7 +84,6 @@ export default function HomeScreen() {
         }
       };
       load();
-      return () => { mounted = false; };
     }, [])
   );
 
