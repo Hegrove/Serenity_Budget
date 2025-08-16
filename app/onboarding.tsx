@@ -32,11 +32,15 @@ export default function OnboardingScreen() {
     if (currentStep < onboardingSteps.length - 1) {
       setCurrentStep(currentStep + 1);
     } else {
+      // Marquer l'onboarding comme terminé
+      localStorage.setItem('onboarding_completed', 'true');
       router.replace('/(tabs)');
     }
   };
 
   const handleSkip = () => {
+    // Marquer l'onboarding comme terminé même si on skip
+    localStorage.setItem('onboarding_completed', 'true');
     router.replace('/(tabs)');
   };
 

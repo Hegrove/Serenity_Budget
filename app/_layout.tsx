@@ -29,7 +29,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (!isLoading && fontsLoaded) {
       if (!isAuthenticated) {
-        router.replace('/auth/login');
+        router.replace('/onboarding');
       }
     }
   }, [isAuthenticated, isLoading, fontsLoaded]);
@@ -41,8 +41,6 @@ export default function RootLayout() {
   return (
     <>
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="auth/login" options={{ gestureEnabled: false }} />
-        <Stack.Screen name="auth/register" options={{ gestureEnabled: false }} />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="transaction-details/[id]" options={{ presentation: 'modal' }} />

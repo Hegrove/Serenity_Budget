@@ -62,7 +62,7 @@ export default function SettingsScreen() {
           onPress: async () => {
             triggerLight();
             await logout();
-            router.replace('/auth/login');
+            router.replace('/onboarding');
           },
         },
       ]
