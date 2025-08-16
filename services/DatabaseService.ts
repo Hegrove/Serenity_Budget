@@ -82,6 +82,7 @@ class DatabaseService {
     if (!this.db) throw new Error('Database not opened');
     const db = this.db;
 
+    // Create tables individually to avoid native execution issues
     await db.execAsync(`
       CREATE TABLE IF NOT EXISTS transactions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -92,8 +93,10 @@ class DatabaseService {
         description TEXT,
         isShared INTEGER DEFAULT 0,
         createdAt TEXT DEFAULT CURRENT_TIMESTAMP
-      );
+      )
+    `);
 
+    await db.execAsync(`
       CREATE TABLE IF NOT EXISTS budget_categories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
@@ -102,8 +105,10 @@ class DatabaseService {
         color TEXT NOT NULL,
         isActive INTEGER DEFAULT 1,
         includedInBudget INTEGER DEFAULT 1
-      );
+      )
+    `);
 
+    await db.execAsync(`
       CREATE TABLE IF NOT EXISTS savings_goals (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
@@ -112,15 +117,17 @@ class DatabaseService {
         targetDate TEXT NOT NULL,
         isActive INTEGER DEFAULT 1,
         createdAt TEXT DEFAULT CURRENT_TIMESTAMP
-      );
+      )
+    `);
 
+    await db.execAsync(`
       CREATE TABLE IF NOT EXISTS user_settings (
         id INTEGER PRIMARY KEY,
         budgetMethod TEXT DEFAULT 'thirds',
         currency TEXT DEFAULT 'EUR',
         notifications INTEGER DEFAULT 1,
         biometricEnabled INTEGER DEFAULT 0
-      );
+      )
     `);
 
     // Ajout de la colonne includedInBudget (si absente)
@@ -135,23 +142,6 @@ class DatabaseService {
       await db.execAsync(`ALTER TABLE user_settings ADD COLUMN monthlyBudget REAL;`); 
     } catch (e) {
       // ignore si la colonne existe déjà
-    }
-
-    // Initialiser monthlyBudget si vide : somme des allocations des catégories budgétées
-    await db.execAsync(`
-      UPDATE user_settings SET monthlyBudget = (
-        SELECT IFNULL(SUM(allocated), 0)
-        FROM budget_categories
-        WHERE isActive = 1 AND includedInBudget = 1
-      )
-      WHERE (monthlyBudget IS NULL OR monthlyBudget = 0)
-    `);
-
-    // Ajouter la colonne includedInBudget si elle n'existe pas déjà
-    try {
-      await db.execAsync(`ALTER TABLE budget_categories ADD COLUMN includedInBudget INTEGER DEFAULT 1;`);
-    } catch (e) {
-      // ignore "duplicate column name"
     }
 
     // Colonnes supplémentaires (safe migrations)
