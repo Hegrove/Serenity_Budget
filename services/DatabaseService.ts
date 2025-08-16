@@ -469,12 +469,14 @@ class DatabaseService {
 
       // Retirer l'ancien montant de l'ancienne catégorie (si c'était une dépense)
       if (oldAmount < 0) {
-        await this.ensureCategoryExistsAndUpdate(oldCategory, -Math.abs(oldAmount));
+        await this.ensureCategory(oldCategory);
+        await this.updateCategorySpent(oldCategory, -Math.abs(oldAmount));
       }
 
       // Ajouter le nouveau montant à la nouvelle catégorie (si c'est une dépense)
       if (newAmount < 0) {
-        await this.ensureCategoryExistsAndUpdate(newCategory, Math.abs(newAmount));
+        await this.ensureCategory(newCategory);
+        await this.updateCategorySpent(newCategory, Math.abs(newAmount));
       }
     }
   }
