@@ -87,7 +87,10 @@ class AuthService {
 
   private hashPassword(password: string): string {
     // En production, utiliser bcrypt ou une vraie fonction de hachage
-    return btoa(password + 'serenity_salt');
+    const saltedPassword = password + 'serenity_salt';
+    // Encoder pour être compatible avec btoa (Latin-1 uniquement)
+    const encodedPassword = unescape(encodeURIComponent(saltedPassword));
+    return btoa(encodedPassword);
   }
 
   private validateEmail(email: string): boolean {
