@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
 /* ---------- Types ---------- */
 
@@ -586,14 +587,37 @@ class DatabaseService {
 
   /* ----- Secure storage ----- */
 
+  private async secureGetItem(key: string): Promise<string | null> {
+    if (Platform.OS === 'web') {
+      return localStorage.getItem(key);
+    }
+    return await SecureStore.getItemAsync(key);
+  }
+
+  private async secureSetItem(key: string, value: string): Promise<void> {
+    if (Platform.OS === 'web') {
+      localStorage.setItem(key, value);
+    } else {
+      await SecureStore.setItemAsync(key, value);
+    }
+  }
+
+  private async secureDeleteItem(key: string): Promise<void> {
+    if (Platform.OS === 'web') {
+      localStorage.removeItem(key);
+    } else {
+      await SecureStore.deleteItemAsync(key);
+    }
+  }
+
   async encryptAndStore(key: string, value: string): Promise<void> {
-    await SecureStore.setItemAsync(key, value);
+    await this.secureSetItem(key, value);
   }
   async getSecureItem(key: string): Promise<string | null> {
-    return SecureStore.getItemAsync(key);
+    return this.secureGetItem(key);
   }
   async deleteSecureItem(key: string): Promise<void> {
-    await SecureStore.deleteItemAsync(key);
+    await this.secureDeleteItem(key);
   }
 
   /* ----- Reset complet ----- */

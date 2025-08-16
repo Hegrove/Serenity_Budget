@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import { databaseService } from './DatabaseService';
 
 export interface User {
@@ -20,6 +21,30 @@ class AuthService {
   private currentUser: User | null = null;
   private authListeners: ((state: AuthState) => void)[] = [];
 
+  // Helper pour le stockage sécurisé compatible web
+  private async secureGetItem(key: string): Promise<string | null> {
+    if (Platform.OS === 'web') {
+      return localStorage.getItem(key);
+    }
+    return await SecureStore.getItemAsync(key);
+  }
+
+  private async secureSetItem(key: string, value: string): Promise<void> {
+    if (Platform.OS === 'web') {
+      localStorage.setItem(key, value);
+    } else {
+      await SecureStore.setItemAsync(key, value);
+    }
+  }
+
+  private async secureDeleteItem(key: string): Promise<void> {
+    if (Platform.OS === 'web') {
+      localStorage.removeItem(key);
+    } else {
+      await SecureStore.deleteItemAsync(key);
+    }
+  }
+
   // Simulation d'une base de données utilisateurs (en production, utiliser Supabase)
   private users: Map<string, {
     id: string;
@@ -37,7 +62,7 @@ class AuthService {
 
   private async loadStoredUsers() {
     try {
-      const storedUsers = await SecureStore.getItemAsync('stored_users');
+      const storedUsers = await this.secureGetItem('stored_users');
       if (storedUsers) {
         const usersData = JSON.parse(storedUsers);
         this.users = new Map(usersData);
@@ -50,7 +75,7 @@ class AuthService {
   private async saveUsers() {
     try {
       const usersArray = Array.from(this.users.entries());
-      await SecureStore.setItemAsync('stored_users', JSON.stringify(usersArray));
+      await this.secureSetItem('stored_users', JSON.stringify(usersArray));
     } catch (error) {
       console.error('Erreur lors de la sauvegarde des utilisateurs:', error);
     }
@@ -130,7 +155,7 @@ class AuthService {
       };
 
       // Sauvegarder la session
-      await SecureStore.setItemAsync('current_user', JSON.stringify(user));
+      await this.secureSetItem('current_user', JSON.stringify(user));
       this.currentUser = user;
 
       // Initialiser la base de données pour ce nouvel utilisateur
@@ -172,7 +197,7 @@ class AuthService {
       };
 
       // Sauvegarder la session
-      await SecureStore.setItemAsync('current_user', JSON.stringify(user));
+      await this.secureSetItem('current_user', JSON.stringify(user));
       this.currentUser = user;
 
       // Initialiser la base de données pour cet utilisateur
@@ -189,7 +214,7 @@ class AuthService {
 
   async logout(): Promise<void> {
     try {
-      await SecureStore.deleteItemAsync('current_user');
+      await this.secureDeleteItem('current_user');
       this.currentUser = null;
       this.notifyListeners();
     } catch (error) {
@@ -203,7 +228,7 @@ class AuthService {
     }
 
     try {
-      const storedUser = await SecureStore.getItemAsync('current_user');
+      const storedUser = await this.secureGetItem('current_user');
       if (storedUser) {
         this.currentUser = JSON.parse(storedUser);
         return this.currentUser;
@@ -277,7 +302,7 @@ class AuthService {
 
       this.users.set(this.currentUser.email, userData);
       await this.saveUsers();
-      await SecureStore.setItemAsync('current_user', JSON.stringify(this.currentUser));
+      await this.secureSetItem('current_user', JSON.stringify(this.currentUser));
 
       this.notifyListeners();
 
