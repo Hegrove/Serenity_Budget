@@ -1,16 +1,73 @@
+import 'react-native-gesture-handler';
+import { enableScreens } from 'react-native-screens';
+
+enableScreens(true);
+
+import { useEffect } from 'react';
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar'
+import { StatusBar } from 'expo-status-bar';
+import { router } from 'expo-router';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
+import { useFonts } from 'expo-font';
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold
+} from '@expo-google-fonts/inter';
+import * as SplashScreen from 'expo-splash-screen';
+import { useAuth } from '@/hooks/useAuth';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   useFrameworkReady();
+  
+  const [fontsLoaded, fontError] = useFonts({
+    'Inter-Regular': Inter_400Regular,
+    'Inter-Medium': Inter_500Medium,
+    'Inter-SemiBold': Inter_600SemiBold,
+    'Inter-Bold': Inter_700Bold,
+  });
+
+  const { isAuthenticated, isLoading } = useAuth();
+
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded, fontError]);
+
+  // Redirection basée sur l'état d'authentification
+  useEffect(() => {
+    if (!isLoading && fontsLoaded) {
+      if (!isAuthenticated) {
+        router.replace('/onboarding');
+      }
+    }
+  }, [isAuthenticated, isLoading, fontsLoaded]);
+
+  if (!fontsLoaded && !fontError || isLoading) {
+    return null;
+  }
+
   return (
-    <>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="onboarding" />
+          <Stack.Screen name="auth/login" />
+          <Stack.Screen name="auth/register" />
+          <Stack.Screen name="transaction-details/[id]" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="add-transaction" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="+not-found" />
+        </Stack>
+        <StatusBar style="auto" />
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
