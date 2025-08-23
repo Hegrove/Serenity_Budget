@@ -1,8 +1,4 @@
 import 'react-native-gesture-handler';
-import { enableScreens } from 'react-native-screens';
-
-enableScreens(true);
-
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
