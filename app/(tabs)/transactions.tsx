@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { Search, Filter, ShoppingCart, Car, Home, Utensils, DollarSign } from 'lucide-react-native';
+import { Search, Filter, ShoppingCart, Car, Chrome as Home, Utensils, DollarSign } from 'lucide-react-native';
 import { databaseService, Transaction } from '@/services/DatabaseService';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { useHapticFeedback } from '@/hooks/useHapticFeedback';
