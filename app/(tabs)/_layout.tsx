@@ -1,4 +1,5 @@
 import { Tabs } from 'expo-router';
+import { router } from 'expo-router';
 import { Chrome as Home, Receipt, Target, Users } from 'lucide-react-native';
 
 export default function TabLayout() {
@@ -26,28 +27,36 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Accueil',
-          tabBarIcon: ({ size, color }) => <Home size={size} color={color} />,
+          tabBarIcon: ({ size, color }) => (
+            <Home size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="transactions"
         options={{
           title: 'Transactions',
-          tabBarIcon: ({ size, color }) => <Receipt size={size} color={color} />,
+          tabBarIcon: ({ size, color }) => (
+            <Receipt size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="budget"
         options={{
           title: 'Budget',
-          tabBarIcon: ({ size, color }) => <Target size={size} color={color} />,
+          tabBarIcon: ({ size, color }) => (
+            <Target size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="family"
         options={{
           title: 'Famille',
-          tabBarIcon: ({ size, color }) => <Users size={size} color={color} />,
+          tabBarIcon: ({ size, color }) => (
+            <Users size={size} color={color} />
+          ),
         }}
       />
     </Tabs>

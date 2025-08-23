@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { Settings, PieChart, Plus, CreditCard as Edit3 } from 'lucide-react-native';
+import { Settings, ChartPie as PieChart, Plus, CreditCard as Edit3 } from 'lucide-react-native';
 import { databaseService, BudgetCategory } from '@/services/DatabaseService';
 import { formatCurrency } from '@/utils/formatters';
 import { useHapticFeedback } from '@/hooks/useHapticFeedback';
