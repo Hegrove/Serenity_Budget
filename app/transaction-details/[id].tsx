@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, Modal, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -127,15 +127,8 @@ export default function TransactionDetailsScreen() {
   };
 
   const handleDelete = () => {
-    if (Platform.OS === 'web') {
-      // @ts-ignore
-      if (typeof window !== 'undefined' && window.confirm?.('Êtes-vous sûr de vouloir supprimer cette transaction ? Cette action est irréversible.')) {
-        confirmDelete();
-      }
-    } else {
-      setShowDeleteModal(true);
-      triggerLight();
-    }
+    setShowDeleteModal(true);
+    triggerLight();
   };
 
   const confirmDelete = async () => {
